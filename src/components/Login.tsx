@@ -15,7 +15,13 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/login', {
+      // Use relative path in browser, absolute in native app
+      const isNative = (window as any).Capacitor?.isNative;
+      const baseUrl = isNative ? (import.meta.env.VITE_APP_URL || '') : '';
+      const url = `${baseUrl}/api/login`;
+      console.log('Attempting login to:', url);
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -24,14 +30,16 @@ export default function Login() {
       });
 
       const data = await response.json();
+      console.log('Login response:', response.status, data);
 
       if (response.ok) {
         login(data.token, data.role);
       } else {
         setError(data.error || 'فشل تسجيل الدخول');
       }
-    } catch (err) {
-      setError('حدث خطأ في الاتصال بالخادم');
+    } catch (err: any) {
+      console.error('Login fetch error:', err);
+      setError(`حدث خطأ في الاتصال بالخادم: ${err.message || 'خطأ غير معروف'}`);
     } finally {
       setIsLoading(false);
     }

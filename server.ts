@@ -1,4 +1,5 @@
 import express from "express";
+import cors from 'cors';
 import TelegramBot from 'node-telegram-bot-api';
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
@@ -42,6 +43,9 @@ dotenv.config();
 
 const app = express();
 const PORT = 3000;
+
+app.use(cors());
+app.use(express.json());
 
 // نظام تسجيل مبسط لتتبع الأخطاء
 const recentLogs: string[] = [];
@@ -126,8 +130,6 @@ app.post('/api/fetch-price', async (req, res) => {
   }
 });
 
-app.use(express.json()); // ضروري لقراءة بيانات الـ Webhook
-
 // نقطة نهاية لاستقبال تحديثات تليكرام (Webhook)
 app.post('/api/telegram-webhook', (req, res) => {
   console.log('Received Telegram webhook:', JSON.stringify(req.body));
@@ -153,7 +155,14 @@ app.get('/api/webhook-info', async (req, res) => {
 });
 
 app.post('/api/login', (req, res) => {
-  const { username, password } = req.body;
+  console.log('Login request received:', req.body?.username);
+  const { username, password } = req.body || {};
+  
+  if (!username || !password) {
+    console.log('Missing username or password');
+    return res.status(400).json({ error: 'يرجى إدخال اسم المستخدم وكلمة المرور' });
+  }
+
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const userAgent = req.headers['user-agent'] || 'Unknown Device';
   

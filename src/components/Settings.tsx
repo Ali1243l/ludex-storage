@@ -48,7 +48,9 @@ export default function Settings() {
     const fetchIpLogs = async () => {
       try {
         const token = localStorage.getItem('authToken');
-        const response = await fetch('/api/ip-logs', {
+        const isNative = (window as any).Capacitor?.isNative;
+        const baseUrl = isNative ? (import.meta.env.VITE_APP_URL || '') : '';
+        const response = await fetch(`${baseUrl}/api/ip-logs`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
