@@ -10,19 +10,17 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import * as cheerio from 'cheerio';
 import jwt from 'jsonwebtoken';
-import Database from 'better-sqlite3';
 
-const db = new Database('auth_logs.db');
-db.exec(`
-  CREATE TABLE IF NOT EXISTS access_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ip_address TEXT,
-    user_role TEXT,
-    device_info TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(ip_address, user_role)
-  )
-`);
+// نظام تخزين السجلات في الذاكرة (متوافق مع الاستضافات السحابية)
+interface AccessLog {
+  id: number;
+  ip_address: string;
+  user_role: string;
+  device_info: string;
+  timestamp: string;
+}
+const accessLogs: AccessLog[] = [];
+let logIdCounter = 1;
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-for-ludex-store';
 
@@ -180,13 +178,21 @@ app.post('/api/login', (req, res) => {
 
   if (role) {
     try {
-      db.prepare(`
-        INSERT INTO access_logs (ip_address, user_role, device_info) 
-        VALUES (?, ?, ?)
-        ON CONFLICT(ip_address, user_role) DO UPDATE SET 
-        timestamp = CURRENT_TIMESTAMP,
-        device_info = excluded.device_info
-      `).run(String(ip), role, userAgent);
+      const existingLogIndex = accessLogs.findIndex(l => l.ip_address === String(ip) && l.user_role === role);
+      if (existingLogIndex >= 0) {
+        accessLogs[existingLogIndex].timestamp = new Date().toISOString();
+        accessLogs[existingLogIndex].device_info = userAgent;
+      } else {
+        accessLogs.push({
+          id: logIdCounter++,
+          ip_address: String(ip),
+          user_role: role,
+          device_info: userAgent,
+          timestamp: new Date().toISOString()
+        });
+      }
+      // الاحتفاظ بآخر 100 سجل فقط لتوفير الذاكرة
+      if (accessLogs.length > 100) accessLogs.shift();
     } catch (e) {
       console.error('Error logging IP:', e);
     }
@@ -211,8 +217,9 @@ app.get('/api/ip-logs', (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const logs = db.prepare('SELECT * FROM access_logs ORDER BY timestamp DESC').all();
-    res.json(logs);
+    // ترتيب السجلات من الأحدث للأقدم
+    const sortedLogs = [...accessLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    res.json(sortedLogs);
   } catch (e) {
     res.status(401).json({ error: 'Invalid token' });
   }
@@ -277,11 +284,12 @@ function startTelegramBot() {
     return;
   }
 
-  const appUrl = process.env.APP_URL;
-  const isDev = appUrl?.includes('ais-dev');
+  const rawAppUrl = process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+  const appUrl = rawAppUrl?.replace(/\/$/, ''); // Remove trailing slash if any
+  const isDev = appUrl?.includes('ais-dev') || appUrl?.includes('localhost');
 
   if (appUrl && !isDev) {
-    // استخدام Webhook في بيئة الاستضافة (النسخة المشتركة)
+    // استخدام Webhook في بيئة الاستضافة (Vercel وغيرها)
     bot = new TelegramBot(token);
     const webhookUrl = `${appUrl}/api/telegram-webhook`;
     bot.setWebHook(webhookUrl).then(() => {
@@ -551,4 +559,12 @@ async function startServer() {
   process.once('SIGUSR2', shutdown); // For nodemon/tsx restarts
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+} else {
+  // In Vercel, we don't start the Express server listener, 
+  // but we still need to initialize the bot instance for webhooks/sending messages.
+  startTelegramBot();
+}
+
+export default app;

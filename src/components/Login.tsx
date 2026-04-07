@@ -29,6 +29,13 @@ export default function Login() {
         body: JSON.stringify({ username, password }),
       });
 
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error('Non-JSON response received:', text);
+        throw new Error('السيرفر غير متاح حالياً أو الرابط غير صحيح (تأكد من استخدام رابط السيرفر الحقيقي وليس Vercel)');
+      }
+
       const data = await response.json();
       console.log('Login response:', response.status, data);
 
