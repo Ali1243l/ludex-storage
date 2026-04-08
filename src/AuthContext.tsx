@@ -31,8 +31,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .eq('id', session.user.id)
           .single();
 
+        if (error) {
+          console.log("Supabase fetch error:", error.code, error.message);
+        }
+
         if (error && (error.code === 'PGRST116' || error.code === '42P01' || error.code === '42501')) {
           // User doesn't exist, table doesn't exist, or RLS blocked read. Try creating them.
+          console.log("Attempting to create new user record...");
           const { data: newUser, error: insertError } = await supabase
             .from('app_users')
             .insert([
@@ -47,15 +52,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .single();
             
           if (!insertError && newUser) {
+            console.log("New user created successfully:", newUser);
             setRole(newUser.role as Role);
             setIsApproved(newUser.is_approved);
           } else {
-            // Fallback if table doesn't exist yet
-            console.error("Could not create user record, table might not exist:", insertError);
+            console.error("Could not create user record. Insert error:", insertError?.code, insertError?.message);
+            // If error is 23505 (duplicate key), it means the user exists but RLS blocked the SELECT.
+            if (insertError?.code === '23505') {
+              console.error("CRITICAL: User exists in database but RLS policies are blocking read access!");
+            }
             setRole('pending');
             setIsApproved(false);
           }
         } else if (userRecord) {
+          console.log("User record found:", userRecord);
           setRole(userRecord.role as Role);
           setIsApproved(userRecord.is_approved);
         }
