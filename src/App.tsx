@@ -26,7 +26,7 @@ const getDaysRemaining = (expirationDate: string) => {
 };
 
 export default function App() {
-  const { role, token, logout } = useAuth();
+  const { role, token, logout, isApproved } = useAuth();
   const [activePage, setActivePage] = useState<'subscriptions' | 'finances' | 'customers' | 'products' | 'sales' | 'settings' | 'suppliers' | 'users'>('subscriptions');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -226,7 +226,7 @@ export default function App() {
     ] : []),
   ] as const;
 
-  if (!token || !role) {
+  if (!token || !role || role === 'pending' || !isApproved) {
     return <Login />;
   }
 
