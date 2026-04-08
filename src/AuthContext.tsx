@@ -31,8 +31,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .eq('id', session.user.id)
           .single();
 
-        if (error && (error.code === 'PGRST116' || error.code === '42P01')) {
-          // User doesn't exist or table doesn't exist, create them as pending
+        if (error && (error.code === 'PGRST116' || error.code === '42P01' || error.code === '42501')) {
+          // User doesn't exist, table doesn't exist, or RLS blocked read. Try creating them.
           const { data: newUser, error: insertError } = await supabase
             .from('app_users')
             .insert([
