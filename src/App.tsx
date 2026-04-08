@@ -7,6 +7,7 @@ import Products from './components/Products';
 import Sales from './components/Sales';
 import Suppliers from './components/Suppliers';
 import SettingsPage from './components/Settings';
+import UsersPage from './components/Users';
 import ConfirmDeleteModal from './components/ConfirmDeleteModal';
 import { supabase } from './supabaseClient';
 import { useAuth } from './AuthContext';
@@ -26,7 +27,7 @@ const getDaysRemaining = (expirationDate: string) => {
 
 export default function App() {
   const { role, token, logout } = useAuth();
-  const [activePage, setActivePage] = useState<'subscriptions' | 'finances' | 'customers' | 'products' | 'sales' | 'settings' | 'suppliers'>('subscriptions');
+  const [activePage, setActivePage] = useState<'subscriptions' | 'finances' | 'customers' | 'products' | 'sales' | 'settings' | 'suppliers' | 'users'>('subscriptions');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -218,8 +219,11 @@ export default function App() {
     { id: 'sales', label: 'سجل البيع', icon: ShoppingCart },
     { id: 'customers', label: 'الزبائن', icon: Users },
     { id: 'finances', label: 'المالية', icon: Wallet },
-    { id: 'suppliers', label: 'الموردين', icon: Store },
-    ...(role === 'admin' ? [{ id: 'settings', label: 'الإعدادات', icon: Settings }] : []),
+    ...(role === 'admin' ? [
+      { id: 'suppliers', label: 'الموردين', icon: Store },
+      { id: 'users', label: 'المستخدمين', icon: Users },
+      { id: 'settings', label: 'الإعدادات', icon: Settings }
+    ] : []),
   ] as const;
 
   if (!token || !role) {
@@ -678,6 +682,8 @@ export default function App() {
           <Sales />
         ) : activePage === 'settings' ? (
           <SettingsPage />
+        ) : activePage === 'users' ? (
+          <UsersPage />
         ) : (
           <Customers />
         )}

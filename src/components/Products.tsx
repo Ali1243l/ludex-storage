@@ -417,20 +417,22 @@ export default function Products() {
                         <div className="flex items-center cursor-pointer group" onClick={() => handleOpenModal(product)}>
                           <Box className="w-4 h-4 ml-2 text-gray-400 dark:text-slate-500 group-hover:text-indigo-500 transition-colors" />
                           <span className="text-sm font-medium text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{product.name}</span>
-                          <div className="flex items-center mr-2 gap-1" onClick={(e) => e.stopPropagation()}>
-                            {parseLinks(product.productLink).map((link, idx) => (
-                              <a 
-                                key={idx}
-                                href={link.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
-                                title={`فتح الرابط ${idx + 1}${link.finalPrice ? ` - السعر النهائي: ${link.finalPrice.toLocaleString()}` : ''}${link.duration ? ` - المدة: ${link.duration}` : ''}`}
-                              >
-                                <ExternalLink className="w-4 h-4" />
-                              </a>
-                            ))}
-                          </div>
+                          {role === 'admin' && (
+                            <div className="flex items-center mr-2 gap-1" onClick={(e) => e.stopPropagation()}>
+                              {parseLinks(product.productLink).map((link, idx) => (
+                                <a 
+                                  key={idx}
+                                  href={link.url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
+                                  title={`فتح الرابط ${idx + 1}${link.finalPrice ? ` - السعر النهائي: ${link.finalPrice.toLocaleString()}` : ''}${link.duration ? ` - المدة: ${link.duration}` : ''}`}
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </a>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -444,10 +446,14 @@ export default function Products() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center text-sm text-gray-500 dark:text-slate-400">
-                          <Truck className="w-4 h-4 ml-1.5 text-gray-400 dark:text-slate-500" />
-                          {product.supplier || '-'}
-                        </div>
+                        {role === 'admin' ? (
+                          <div className="flex items-center text-sm text-gray-500 dark:text-slate-400">
+                            <Truck className="w-4 h-4 ml-1.5 text-gray-400 dark:text-slate-500" />
+                            {product.supplier || '-'}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-500 dark:text-slate-400">محجوب</div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1 max-h-24 overflow-y-auto custom-scrollbar min-w-[200px]">
@@ -532,20 +538,22 @@ export default function Products() {
                           onClick={() => handleOpenModal(product)}
                         >
                           {product.name}
-                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                            {parseLinks(product.productLink).map((link, idx) => (
-                              <a 
-                                key={idx}
-                                href={link.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
-                                title={`فتح الرابط ${idx + 1}${link.finalPrice ? ` - السعر النهائي: ${link.finalPrice.toLocaleString()}` : ''}${link.duration ? ` - المدة: ${link.duration}` : ''}`}
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
-                            ))}
-                          </div>
+                          {role === 'admin' && (
+                            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                              {parseLinks(product.productLink).map((link, idx) => (
+                                <a 
+                                  key={idx}
+                                  href={link.url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
+                                  title={`فتح الرابط ${idx + 1}${link.finalPrice ? ` - السعر النهائي: ${link.finalPrice.toLocaleString()}` : ''}${link.duration ? ` - المدة: ${link.duration}` : ''}`}
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <div className="flex gap-2 mt-1">
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 dark:bg-blue-500/10 text-blue-800 dark:text-blue-400">
@@ -591,10 +599,12 @@ export default function Products() {
                   )}
                   
                   <div className="mt-3 flex flex-col gap-2 text-xs">
-                    <div className="flex items-center text-slate-500 dark:text-slate-400">
-                      <Truck className="w-3.5 h-3.5 ml-1" />
-                      {product.supplier || '-'}
-                    </div>
+                    {role === 'admin' && (
+                      <div className="flex items-center text-slate-500 dark:text-slate-400">
+                        <Truck className="w-3.5 h-3.5 ml-1" />
+                        {product.supplier || '-'}
+                      </div>
+                    )}
                     {product.notes && <div className="text-slate-500 dark:text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto custom-scrollbar">{product.notes}</div>}
                   </div>
                 </div>
@@ -678,168 +688,165 @@ export default function Products() {
                         </select>
                       </div>
                     </div>
-                    <div>
-                      <div className="flex justify-between items-center mb-1.5">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">روابط المنتج وحاسبة الأسعار (الحد الأقصى 5)</label>
-                        {role === 'admin' && formData.productLinks.length < 5 && (
-                          <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, productLinks: [...formData.productLinks, { url: '', originalPrice: '', finalPrice: 0, duration: '' }] })}
-                            className="inline-flex items-center text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 px-2 py-1 rounded transition-colors"
-                          >
-                            <Plus className="w-3 h-3 ml-1" />
-                            إضافة رابط
-                          </button>
-                        )}
-                      </div>
-                      
-                      <div className="mb-3 bg-indigo-50 dark:bg-indigo-500/10 p-3 rounded-lg border border-indigo-100 dark:border-indigo-500/20">
-                        <label className="block text-xs font-medium text-indigo-800 dark:text-indigo-300 mb-1.5">
-                          سعر الصرف / معامل الضرب (يُطبق على جميع الروابط)
-                        </label>
-                        <input
-                          type="number"
-                          disabled={role !== 'admin'}
-                          className="block w-full sm:w-1/2 border border-indigo-200 dark:border-indigo-500/30 rounded-md shadow-sm py-1.5 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 sm:text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                          value={multiplier}
-                          onChange={(e) => {
-                            const val = e.target.value === '' ? '' : Number(e.target.value);
-                            setMultiplier(val);
-                            const newLinks = formData.productLinks.map(link => ({
-                              ...link,
-                              finalPrice: calculateFinalPrice(Number(link.originalPrice), Number(val))
-                            }));
-                            setFormData({ ...formData, productLinks: newLinks });
-                          }}
-                          placeholder="مثال: 1500"
-                        />
-                      </div>
+                    {role === 'admin' && (
+                      <>
+                        <div>
+                          <div className="flex justify-between items-center mb-1.5">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">روابط المنتج وحاسبة الأسعار (الحد الأقصى 5)</label>
+                            {formData.productLinks.length < 5 && (
+                              <button
+                                type="button"
+                                onClick={() => setFormData({ ...formData, productLinks: [...formData.productLinks, { url: '', originalPrice: '', finalPrice: 0, duration: '' }] })}
+                                className="inline-flex items-center text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 px-2 py-1 rounded transition-colors"
+                              >
+                                <Plus className="w-3 h-3 ml-1" />
+                                إضافة رابط
+                              </button>
+                            )}
+                          </div>
+                          
+                          <div className="mb-3 bg-indigo-50 dark:bg-indigo-500/10 p-3 rounded-lg border border-indigo-100 dark:border-indigo-500/20">
+                            <label className="block text-xs font-medium text-indigo-800 dark:text-indigo-300 mb-1.5">
+                              سعر الصرف / معامل الضرب (يُطبق على جميع الروابط)
+                            </label>
+                            <input
+                              type="number"
+                              className="block w-full sm:w-1/2 border border-indigo-200 dark:border-indigo-500/30 rounded-md shadow-sm py-1.5 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 sm:text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                              value={multiplier}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? '' : Number(e.target.value);
+                                setMultiplier(val);
+                                const newLinks = formData.productLinks.map(link => ({
+                                  ...link,
+                                  finalPrice: calculateFinalPrice(Number(link.originalPrice), Number(val))
+                                }));
+                                setFormData({ ...formData, productLinks: newLinks });
+                              }}
+                              placeholder="مثال: 1500"
+                            />
+                          </div>
 
-                      <div className="space-y-2">
-                        {formData.productLinks.length === 0 && (
-                          <p className="text-xs text-gray-500 dark:text-slate-400">لا توجد روابط مضافة.</p>
-                        )}
-                        {formData.productLinks.map((link, index) => (
-                          <div key={index} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-gray-50 dark:bg-slate-700/30 p-2 rounded-lg border border-gray-100 dark:border-slate-600">
-                            <div className="relative flex-1 w-full flex gap-2">
-                              <div className="relative flex-1">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                  <LinkIcon className="h-4 w-4 text-gray-400 dark:text-slate-500" />
+                          <div className="space-y-2">
+                            {formData.productLinks.length === 0 && (
+                              <p className="text-xs text-gray-500 dark:text-slate-400">لا توجد روابط مضافة.</p>
+                            )}
+                            {formData.productLinks.map((link, index) => (
+                              <div key={index} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-gray-50 dark:bg-slate-700/30 p-2 rounded-lg border border-gray-100 dark:border-slate-600">
+                                <div className="relative flex-1 w-full flex gap-2">
+                                  <div className="relative flex-1">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                      <LinkIcon className="h-4 w-4 text-gray-400 dark:text-slate-500" />
+                                    </div>
+                                    <input
+                                      type="url"
+                                      dir="ltr"
+                                      className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 pl-10 pr-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-left"
+                                      value={link.url}
+                                      onChange={(e) => {
+                                        const newLinks = [...formData.productLinks];
+                                        newLinks[index].url = e.target.value;
+                                        setFormData({ ...formData, productLinks: newLinks });
+                                      }}
+                                      placeholder="https://example.com/product"
+                                    />
+                                  </div>
+                                  {link.url && (
+                                    <a
+                                      href={link.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-2 text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 dark:text-indigo-400 dark:hover:text-indigo-300 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 rounded-md transition-colors flex items-center justify-center shrink-0"
+                                      title="فتح الرابط"
+                                    >
+                                      <ExternalLink className="w-4 h-4" />
+                                    </a>
+                                  )}
                                 </div>
-                                <input
-                                  type="url"
-                                  dir="ltr"
-                                  disabled={role !== 'admin'}
-                                  className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 pl-10 pr-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-left disabled:opacity-50 disabled:cursor-not-allowed"
-                                  value={link.url}
-                                  onChange={(e) => {
-                                    const newLinks = [...formData.productLinks];
-                                    newLinks[index].url = e.target.value;
-                                    setFormData({ ...formData, productLinks: newLinks });
-                                  }}
-                                  placeholder="https://example.com/product"
-                                />
-                              </div>
-                              {link.url && (
-                                <a
-                                  href={link.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-2 text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 dark:text-indigo-400 dark:hover:text-indigo-300 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 rounded-md transition-colors flex items-center justify-center shrink-0"
-                                  title="فتح الرابط"
-                                >
-                                  <ExternalLink className="w-4 h-4" />
-                                </a>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                              {formData.category === 'اشتراكات' && (
-                                <div className="relative w-full sm:w-24">
-                                  <input
-                                    type="text"
-                                    disabled={role !== 'admin'}
-                                    className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                    value={link.duration || ''}
-                                    onChange={(e) => {
-                                      const newLinks = [...formData.productLinks];
-                                      newLinks[index].duration = e.target.value;
+                                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                                  {formData.category === 'اشتراكات' && (
+                                    <div className="relative w-full sm:w-24">
+                                      <input
+                                        type="text"
+                                        className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-center"
+                                        value={link.duration || ''}
+                                        onChange={(e) => {
+                                          const newLinks = [...formData.productLinks];
+                                          newLinks[index].duration = e.target.value;
+                                          setFormData({ ...formData, productLinks: newLinks });
+                                        }}
+                                        placeholder="المدة (مثال: شهر)"
+                                      />
+                                    </div>
+                                  )}
+                                  <div className="relative w-full sm:w-24">
+                                    <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                                      <span className="text-gray-500 dark:text-slate-400 text-sm">$</span>
+                                    </div>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 pl-6 pr-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-left"
+                                      value={link.originalPrice}
+                                      onChange={(e) => {
+                                        const price = e.target.value === '' ? '' : Number(e.target.value);
+                                        const newLinks = [...formData.productLinks];
+                                        newLinks[index].originalPrice = price;
+                                        newLinks[index].finalPrice = calculateFinalPrice(Number(price), Number(multiplier));
+                                        setFormData({ ...formData, productLinks: newLinks });
+                                      }}
+                                      placeholder="السعر"
+                                    />
+                                  </div>
+                                  <div className="w-full sm:w-28 px-2 py-2 bg-indigo-100/50 dark:bg-indigo-500/20 rounded-md text-center text-sm font-bold text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 truncate" title="السعر النهائي">
+                                    {link.finalPrice ? link.finalPrice.toLocaleString() : '0'}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newLinks = formData.productLinks.filter((_, i) => i !== index);
                                       setFormData({ ...formData, productLinks: newLinks });
                                     }}
-                                    placeholder="المدة (مثال: شهر)"
-                                  />
+                                    className="p-2 text-gray-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 transition-colors rounded-md hover:bg-red-50 dark:hover:bg-red-500/10 shrink-0"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
                                 </div>
-                              )}
-                              <div className="relative w-full sm:w-24">
-                                <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
-                                  <span className="text-gray-500 dark:text-slate-400 text-sm">$</span>
-                                </div>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  disabled={role !== 'admin'}
-                                  className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 pl-6 pr-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-left disabled:opacity-50 disabled:cursor-not-allowed"
-                                  value={link.originalPrice}
-                                  onChange={(e) => {
-                                    const price = e.target.value === '' ? '' : Number(e.target.value);
-                                    const newLinks = [...formData.productLinks];
-                                    newLinks[index].originalPrice = price;
-                                    newLinks[index].finalPrice = calculateFinalPrice(Number(price), Number(multiplier));
-                                    setFormData({ ...formData, productLinks: newLinks });
-                                  }}
-                                  placeholder="السعر"
-                                />
                               </div>
-                              <div className="w-full sm:w-28 px-2 py-2 bg-indigo-100/50 dark:bg-indigo-500/20 rounded-md text-center text-sm font-bold text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 truncate" title="السعر النهائي">
-                                {link.finalPrice ? link.finalPrice.toLocaleString() : '0'}
-                              </div>
-                              {role === 'admin' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const newLinks = formData.productLinks.filter((_, i) => i !== index);
-                                    setFormData({ ...formData, productLinks: newLinks });
-                                  }}
-                                  className="p-2 text-gray-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 transition-colors rounded-md hover:bg-red-50 dark:hover:bg-red-500/10 shrink-0"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label htmlFor="supplier" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">المورد (من أين تم الشراء؟) <span className="text-red-500">*</span></label>
-                      <input
-                        type="text"
-                        id="supplier"
-                        list="suppliers-list"
-                        required
-                        disabled={role !== 'admin'}
-                        className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                        value={formData.supplier}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setFormData({ ...formData, supplier: val });
-                          const foundSupplier = suppliers.find(s => s.name === val);
-                          if (foundSupplier) {
-                            setMultiplier(foundSupplier.multiplier);
-                            const newLinks = formData.productLinks.map(link => ({
-                              ...link,
-                              finalPrice: calculateFinalPrice(Number(link.originalPrice), foundSupplier.multiplier)
-                            }));
-                            setFormData(prev => ({ ...prev, supplier: val, productLinks: newLinks }));
-                          }
-                        }}
-                        placeholder="اختر من القائمة أو اكتب اسماً جديداً..."
-                      />
-                      <datalist id="suppliers-list">
-                        {suppliers.map(s => (
-                          <option key={s.id} value={s.name} />
-                        ))}
-                      </datalist>
-                    </div>
+                        </div>
+                        <div>
+                          <label htmlFor="supplier" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">المورد (من أين تم الشراء؟) <span className="text-red-500">*</span></label>
+                          <input
+                            type="text"
+                            id="supplier"
+                            list="suppliers-list"
+                            required
+                            className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                            value={formData.supplier}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setFormData({ ...formData, supplier: val });
+                              const foundSupplier = suppliers.find(s => s.name === val);
+                              if (foundSupplier) {
+                                setMultiplier(foundSupplier.multiplier);
+                                const newLinks = formData.productLinks.map(link => ({
+                                  ...link,
+                                  finalPrice: calculateFinalPrice(Number(link.originalPrice), foundSupplier.multiplier)
+                                }));
+                                setFormData(prev => ({ ...prev, supplier: val, productLinks: newLinks }));
+                              }
+                            }}
+                            placeholder="اختر من القائمة أو اكتب اسماً جديداً..."
+                          />
+                          <datalist id="suppliers-list">
+                            {suppliers.map(s => (
+                              <option key={s.id} value={s.name} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
