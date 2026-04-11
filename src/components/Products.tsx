@@ -190,14 +190,17 @@ export default function Products() {
     };
 
     if (editingProduct) {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('products')
         .update(dataToSubmit)
-        .eq('id', editingProduct.id);
+        .eq('id', editingProduct.id)
+        .select();
       
       if (error) {
         console.error("Error updating:", error);
         alert(`حدث خطأ أثناء التعديل: ${error.message}`);
+      } else if (!data || data.length === 0) {
+        alert('لم يتم حفظ التعديلات! يبدو أن هناك مشكلة في صلاحيات قاعدة البيانات (RLS). يرجى تحديث قوانين Supabase.');
       }
     } else {
       const { error } = await supabase
@@ -452,7 +455,7 @@ export default function Products() {
                             {product.supplier || '-'}
                           </div>
                         ) : (
-                          <div className="text-sm text-gray-500 dark:text-slate-400">محجوب</div>
+                          <div className="text-sm text-gray-500 dark:text-slate-400">لا يوجد</div>
                         )}
                       </td>
                       <td className="px-6 py-4">
