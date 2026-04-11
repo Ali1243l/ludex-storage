@@ -60,8 +60,8 @@ export default function Users() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 mb-6">
-        <div className="bg-indigo-100 dark:bg-indigo-500/20 p-2 rounded-lg">
-          <UsersIcon className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+        <div className="bg-blue-100 dark:bg-blue-500/20 p-2 rounded-lg">
+          <UsersIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
         </div>
         <h2 className="text-2xl font-bold text-slate-900 dark:text-white">إدارة المستخدمين</h2>
       </div>
@@ -105,7 +105,7 @@ export default function Users() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
                       {user.role === 'admin' ? (
-                        <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400"><Shield className="w-4 h-4" /> أدمن</span>
+                        <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400"><Shield className="w-4 h-4" /> أدمن</span>
                       ) : user.role === 'viewer' ? (
                         <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400"><User className="w-4 h-4" /> مشاهد</span>
                       ) : (
@@ -117,7 +117,7 @@ export default function Users() {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleApprove(user.id, 'viewer')}
-                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700"
+                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700"
                           >
                             <CheckCircle className="w-4 h-4 ml-1" />
                             قبول كمشاهد
@@ -141,7 +141,7 @@ export default function Users() {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleApprove(user.id, user.role === 'admin' ? 'viewer' : 'admin')}
-                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                            className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                           >
                             تغيير إلى {user.role === 'admin' ? 'مشاهد' : 'أدمن'}
                           </button>

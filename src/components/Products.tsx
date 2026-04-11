@@ -280,7 +280,7 @@ export default function Products() {
               onClick={() => setFilterCategory(cat.id)}
               className={`flex items-center gap-3 px-6 py-3 rounded-2xl border-2 transition-all duration-300 min-w-[140px] ${
                 isActive 
-                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 shadow-lg shadow-indigo-500/10 transform scale-105' 
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 shadow-lg shadow-blue-500/10 transform scale-105' 
                   : 'border-transparent bg-white dark:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700 shadow-sm hover:shadow-md'
               }`}
             >
@@ -288,7 +288,7 @@ export default function Products() {
                 <Icon className="w-5 h-5" />
               </div>
               <div className="text-right">
-                <span className={`block text-sm font-bold ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                <span className={`block text-sm font-bold ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}>
                   {cat.label}
                 </span>
                 {cat.id !== 'all' && (
@@ -306,12 +306,12 @@ export default function Products() {
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-1">
         <div className="bg-white dark:bg-slate-800 overflow-hidden shadow-sm rounded-xl border border-gray-100 dark:border-slate-700 transition-colors duration-200">
           <div className="px-4 py-5 sm:p-6 flex items-center">
-            <div className="p-3 rounded-full bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 ml-4">
+            <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 ml-4">
               <Box className="w-8 h-8" />
             </div>
             <div>
               <dt className="text-sm font-medium text-gray-500 dark:text-slate-400 truncate">إجمالي المنتجات</dt>
-              <dd className="mt-1 text-3xl font-semibold text-indigo-600 dark:text-indigo-400">{stats.totalProducts}</dd>
+              <dd className="mt-1 text-3xl font-semibold text-blue-600 dark:text-blue-400">{stats.totalProducts}</dd>
             </div>
           </div>
         </div>
@@ -327,7 +327,7 @@ export default function Products() {
               </div>
               <input
                 type="text"
-                className="block w-full pl-3 pr-10 py-2 border border-gray-300 dark:border-slate-600 rounded-md leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+                className="block w-full pl-3 pr-10 py-2 border border-gray-300 dark:border-slate-600 rounded-md leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
                 placeholder="ابحث عن منتج أو مورد..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -340,7 +340,7 @@ export default function Products() {
                   <Filter className="h-4 w-4 text-gray-400 dark:text-slate-500" />
                 </div>
                 <select
-                  className="block w-full pl-3 pr-8 py-2 border border-gray-300 dark:border-slate-600 rounded-md leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors appearance-none"
+                  className="block w-full pl-3 pr-8 py-2 border border-gray-300 dark:border-slate-600 rounded-md leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors appearance-none"
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
                 >
@@ -353,7 +353,7 @@ export default function Products() {
               
               <div className="relative flex-1 sm:flex-none sm:w-36">
                 <select
-                  className="block w-full pl-3 pr-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors appearance-none"
+                  className="block w-full pl-3 pr-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors appearance-none"
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
                 >
@@ -368,7 +368,7 @@ export default function Products() {
           {role === 'admin' && (
             <button
               onClick={() => handleOpenModal()}
-              className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors shrink-0"
+              className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors shrink-0"
             >
               <Plus className="w-5 h-5 ml-2 -mr-1" />
               إضافة منتج جديد
@@ -395,7 +395,7 @@ export default function Products() {
                 <tr>
                   <td colSpan={9} className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
                     <div className="flex flex-col items-center justify-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400 mb-4"></div>
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mb-4"></div>
                       <p className="text-lg font-medium text-slate-900 dark:text-white">جاري تحميل البيانات...</p>
                       <p className="text-sm mt-1">يتم الآن جلب معلومات المنتجات من السحابة.</p>
                     </div>
@@ -415,8 +415,8 @@ export default function Products() {
                     <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center cursor-pointer group" onClick={() => handleOpenModal(product)}>
-                          <Box className="w-4 h-4 ml-2 text-gray-400 dark:text-slate-500 group-hover:text-indigo-500 transition-colors" />
-                          <span className="text-sm font-medium text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{product.name}</span>
+                          <Box className="w-4 h-4 ml-2 text-gray-400 dark:text-slate-500 group-hover:text-blue-500 transition-colors" />
+                          <span className="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{product.name}</span>
                           {role === 'admin' && (
                             <div className="flex items-center mr-2 gap-1" onClick={(e) => e.stopPropagation()}>
                               {parseLinks(product.productLink).map((link, idx) => (
@@ -425,7 +425,7 @@ export default function Products() {
                                   href={link.url} 
                                   target="_blank" 
                                   rel="noopener noreferrer"
-                                  className="text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
+                                  className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                                   title={`فتح الرابط ${idx + 1}${link.finalPrice ? ` - السعر النهائي: ${link.finalPrice.toLocaleString()}` : ''}${link.duration ? ` - المدة: ${link.duration}` : ''}`}
                                 >
                                   <ExternalLink className="w-4 h-4" />
@@ -482,7 +482,7 @@ export default function Products() {
                           <div className="flex items-center gap-3">
                             <button
                               onClick={() => handleOpenModal(product)}
-                              className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 transition-colors"
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 transition-colors"
                               title="تعديل"
                             >
                               <Edit2 className="w-4 h-4" />
@@ -510,7 +510,7 @@ export default function Products() {
           {isLoading ? (
             <div className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
               <div className="flex flex-col items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400 mb-4"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mb-4"></div>
                 <p className="text-base font-medium text-slate-900 dark:text-white">جاري تحميل البيانات...</p>
               </div>
             </div>
@@ -529,12 +529,12 @@ export default function Products() {
                 <div key={product.id} className="p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-start">
-                      <div className="flex-shrink-0 h-10 w-10 bg-indigo-100 dark:bg-indigo-500/20 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-lg">
+                      <div className="flex-shrink-0 h-10 w-10 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-lg">
                         <Box className="w-5 h-5" />
                       </div>
                       <div className="ml-3 mr-3">
                         <div 
-                          className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                          className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                           onClick={() => handleOpenModal(product)}
                         >
                           {product.name}
@@ -546,7 +546,7 @@ export default function Products() {
                                   href={link.url} 
                                   target="_blank" 
                                   rel="noopener noreferrer"
-                                  className="text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
+                                  className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                                   title={`فتح الرابط ${idx + 1}${link.finalPrice ? ` - السعر النهائي: ${link.finalPrice.toLocaleString()}` : ''}${link.duration ? ` - المدة: ${link.duration}` : ''}`}
                                 >
                                   <ExternalLink className="w-3.5 h-3.5" />
@@ -569,7 +569,7 @@ export default function Products() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleOpenModal(product)}
-                          className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors"
+                          className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -624,7 +624,7 @@ export default function Products() {
             {/* Header */}
             <div className="bg-gray-50/80 dark:bg-slate-800/80 px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center shrink-0 rounded-t-2xl">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2" id="modal-title">
-                {editingProduct ? (role === 'admin' ? <Edit2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> : <Box className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />) : <Plus className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
+                {editingProduct ? (role === 'admin' ? <Edit2 className="w-5 h-5 text-blue-600 dark:text-blue-400" /> : <Box className="w-5 h-5 text-blue-600 dark:text-blue-400" />) : <Plus className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
                 {editingProduct ? (role === 'admin' ? 'تعديل تفاصيل المنتج' : 'تفاصيل المنتج') : 'إضافة منتج جديد'}
               </h3>
               <button onClick={handleCloseModal} className="text-gray-400 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-200 transition-colors rounded-full p-1 hover:bg-gray-200 dark:hover:bg-slate-700">
@@ -649,7 +649,7 @@ export default function Products() {
                         id="name"
                         required
                         disabled={role !== 'admin'}
-                        className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         placeholder="مثال: اشتراك يوتيوب بريميوم، حساب كانفا..."
@@ -662,7 +662,7 @@ export default function Products() {
                         <select
                           id="category"
                           disabled={role !== 'admin'}
-                          className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                           value={formData.category}
                           onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                         >
@@ -677,7 +677,7 @@ export default function Products() {
                         <select
                           id="type"
                           disabled={role !== 'admin'}
-                          className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                           value={formData.type}
                           onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                         >
@@ -697,7 +697,7 @@ export default function Products() {
                               <button
                                 type="button"
                                 onClick={() => setFormData({ ...formData, productLinks: [...formData.productLinks, { url: '', originalPrice: '', finalPrice: 0, duration: '' }] })}
-                                className="inline-flex items-center text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 px-2 py-1 rounded transition-colors"
+                                className="inline-flex items-center text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 px-2 py-1 rounded transition-colors"
                               >
                                 <Plus className="w-3 h-3 ml-1" />
                                 إضافة رابط
@@ -705,13 +705,13 @@ export default function Products() {
                             )}
                           </div>
                           
-                          <div className="mb-3 bg-indigo-50 dark:bg-indigo-500/10 p-3 rounded-lg border border-indigo-100 dark:border-indigo-500/20">
-                            <label className="block text-xs font-medium text-indigo-800 dark:text-indigo-300 mb-1.5">
+                          <div className="mb-3 bg-blue-50 dark:bg-blue-500/10 p-3 rounded-lg border border-blue-100 dark:border-blue-500/20">
+                            <label className="block text-xs font-medium text-blue-800 dark:text-blue-300 mb-1.5">
                               سعر الصرف / معامل الضرب (يُطبق على جميع الروابط)
                             </label>
                             <input
                               type="number"
-                              className="block w-full sm:w-1/2 border border-indigo-200 dark:border-indigo-500/30 rounded-md shadow-sm py-1.5 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 sm:text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                              className="block w-full sm:w-1/2 border border-blue-200 dark:border-blue-500/30 rounded-md shadow-sm py-1.5 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 sm:text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                               value={multiplier}
                               onChange={(e) => {
                                 const val = e.target.value === '' ? '' : Number(e.target.value);
@@ -740,7 +740,7 @@ export default function Products() {
                                     <input
                                       type="url"
                                       dir="ltr"
-                                      className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 pl-10 pr-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-left"
+                                      className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 pl-10 pr-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-left"
                                       value={link.url}
                                       onChange={(e) => {
                                         const newLinks = [...formData.productLinks];
@@ -755,7 +755,7 @@ export default function Products() {
                                       href={link.url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="p-2 text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 dark:text-indigo-400 dark:hover:text-indigo-300 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 rounded-md transition-colors flex items-center justify-center shrink-0"
+                                      className="p-2 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 dark:text-blue-400 dark:hover:text-blue-300 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 rounded-md transition-colors flex items-center justify-center shrink-0"
                                       title="فتح الرابط"
                                     >
                                       <ExternalLink className="w-4 h-4" />
@@ -767,7 +767,7 @@ export default function Products() {
                                     <div className="relative w-full sm:w-24">
                                       <input
                                         type="text"
-                                        className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-center"
+                                        className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-center"
                                         value={link.duration || ''}
                                         onChange={(e) => {
                                           const newLinks = [...formData.productLinks];
@@ -785,7 +785,7 @@ export default function Products() {
                                     <input
                                       type="number"
                                       step="0.01"
-                                      className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 pl-6 pr-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-left"
+                                      className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 pl-6 pr-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-left"
                                       value={link.originalPrice}
                                       onChange={(e) => {
                                         const price = e.target.value === '' ? '' : Number(e.target.value);
@@ -797,7 +797,7 @@ export default function Products() {
                                       placeholder="السعر"
                                     />
                                   </div>
-                                  <div className="w-full sm:w-28 px-2 py-2 bg-indigo-100/50 dark:bg-indigo-500/20 rounded-md text-center text-sm font-bold text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 truncate" title="السعر النهائي">
+                                  <div className="w-full sm:w-28 px-2 py-2 bg-blue-100/50 dark:bg-blue-500/20 rounded-md text-center text-sm font-bold text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 truncate" title="السعر النهائي">
                                     {link.finalPrice ? link.finalPrice.toLocaleString() : '0'}
                                   </div>
                                   <button
@@ -822,7 +822,7 @@ export default function Products() {
                             id="supplier"
                             list="suppliers-list"
                             required
-                            className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                            className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                             value={formData.supplier}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -881,7 +881,7 @@ export default function Products() {
                               <button
                                 type="button"
                                 onClick={() => setFormData({ ...formData, priceTiers: [{ id: generateId(), name: 'أساسي', costPrice: 0, sellingPrice: 0, duration: '' }] })}
-                                className="inline-flex items-center text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
+                                className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                               >
                                 <Plus className="w-4 h-4 ml-1" />
                                 أضف التسعيرة الأولى
@@ -897,7 +897,7 @@ export default function Products() {
                                   type="text"
                                   placeholder="اسم التسعيرة (مثال: جملة، 3 أشهر)"
                                   disabled={role !== 'admin'}
-                                  className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-1.5 px-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-xs bg-gray-50 dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-1.5 px-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-xs bg-gray-50 dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                   value={tier.name}
                                   onChange={(e) => {
                                     const newTiers = [...formData.priceTiers];
@@ -911,7 +911,7 @@ export default function Products() {
                                   type="number"
                                   placeholder="سعر الشراء"
                                   disabled={role !== 'admin'}
-                                  className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-1.5 pl-8 pr-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-xs bg-gray-50 dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-1.5 pl-8 pr-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-xs bg-gray-50 dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                   value={tier.costPrice || ''}
                                   onChange={(e) => {
                                     const newTiers = [...formData.priceTiers];
@@ -928,7 +928,7 @@ export default function Products() {
                                   type="number"
                                   placeholder="سعر البيع"
                                   disabled={role !== 'admin'}
-                                  className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-1.5 pl-8 pr-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-xs bg-gray-50 dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-1.5 pl-8 pr-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-xs bg-gray-50 dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                   value={tier.sellingPrice || ''}
                                   onChange={(e) => {
                                     const newTiers = [...formData.priceTiers];
@@ -946,7 +946,7 @@ export default function Products() {
                                     type="text"
                                     placeholder="المدة (مثال: شهر، سنة)"
                                     disabled={role !== 'admin'}
-                                    className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-1.5 px-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-xs bg-gray-50 dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-1.5 px-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-xs bg-gray-50 dark:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                     value={tier.duration || ''}
                                     onChange={(e) => {
                                       const newTiers = [...formData.priceTiers];
@@ -992,7 +992,7 @@ export default function Products() {
                       id="notes"
                       rows={4}
                       disabled={role !== 'admin'}
-                      className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white resize-y min-h-[100px] disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white resize-y min-h-[100px] disabled:opacity-50 disabled:cursor-not-allowed"
                       value={formData.notes}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                       placeholder="أي ملاحظات إضافية..."
@@ -1007,7 +1007,7 @@ export default function Products() {
                 {role === 'admin' && (
                   <button
                     type="submit"
-                    className="w-full inline-flex justify-center items-center rounded-lg border border-transparent shadow-sm px-5 py-2.5 bg-indigo-600 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:w-auto transition-colors"
+                    className="w-full inline-flex justify-center items-center rounded-lg border border-transparent shadow-sm px-5 py-2.5 bg-blue-600 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:w-auto transition-colors"
                   >
                     <CheckCircle className="w-4 h-4 ml-2" />
                     حفظ المنتج
@@ -1016,7 +1016,7 @@ export default function Products() {
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="mt-3 w-full inline-flex justify-center items-center rounded-lg border border-gray-300 dark:border-slate-600 shadow-sm px-5 py-2.5 bg-white dark:bg-slate-700 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto transition-colors"
+                  className="mt-3 w-full inline-flex justify-center items-center rounded-lg border border-gray-300 dark:border-slate-600 shadow-sm px-5 py-2.5 bg-white dark:bg-slate-700 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto transition-colors"
                 >
                   {role === 'admin' ? 'إلغاء' : 'إغلاق'}
                 </button>

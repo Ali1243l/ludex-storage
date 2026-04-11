@@ -140,12 +140,12 @@ export default function Suppliers() {
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-1">
         <div className="bg-white dark:bg-slate-800 overflow-hidden shadow-sm rounded-xl border border-gray-100 dark:border-slate-700 transition-colors duration-200">
           <div className="px-4 py-5 sm:p-6 flex items-center">
-            <div className="p-3 rounded-full bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 ml-4">
+            <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 ml-4">
               <Store className="w-8 h-8" />
             </div>
             <div>
               <dt className="text-sm font-medium text-gray-500 dark:text-slate-400 truncate">إجمالي الموردين</dt>
-              <dd className="mt-1 text-3xl font-semibold text-indigo-600 dark:text-indigo-400">{suppliers.length}</dd>
+              <dd className="mt-1 text-3xl font-semibold text-blue-600 dark:text-blue-400">{suppliers.length}</dd>
             </div>
           </div>
         </div>
@@ -160,7 +160,7 @@ export default function Suppliers() {
             </div>
             <input
               type="text"
-              className="block w-full pl-3 pr-10 py-2 border border-gray-300 dark:border-slate-600 rounded-md leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+              className="block w-full pl-3 pr-10 py-2 border border-gray-300 dark:border-slate-600 rounded-md leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
               placeholder="ابحث عن مورد، رابط، أو ملاحظة..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -169,7 +169,7 @@ export default function Suppliers() {
           {role === 'admin' && (
             <button
               onClick={() => handleOpenModal()}
-              className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
+              className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors"
             >
               <Plus className="w-5 h-5 ml-2 -mr-1" />
               إضافة مورد جديد
@@ -193,7 +193,7 @@ export default function Suppliers() {
                 <tr>
                   <td colSpan={4} className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
                     <div className="flex flex-col items-center justify-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400 mb-4"></div>
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mb-4"></div>
                       <p className="text-lg font-medium text-slate-900 dark:text-white">جاري تحميل البيانات...</p>
                     </div>
                   </td>
@@ -221,7 +221,7 @@ export default function Suppliers() {
                         href={supplier.profile_link} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="flex items-center text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 transition-colors"
+                        className="flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 transition-colors"
                       >
                         <ExternalLink className="w-4 h-4 ml-1.5" />
                         فتح البروفايل
@@ -237,7 +237,7 @@ export default function Suppliers() {
                         <div className="flex items-center gap-3">
                           <button
                             onClick={() => handleOpenModal(supplier)}
-                            className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 transition-colors"
+                            className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 transition-colors"
                             title="تعديل"
                           >
                             <Edit2 className="w-4 h-4" />
@@ -263,7 +263,7 @@ export default function Suppliers() {
         <div className="md:hidden divide-y divide-slate-200 dark:divide-slate-700">
           {isLoading ? (
             <div className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400 mx-auto mb-4"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mx-auto mb-4"></div>
               <p className="text-base font-medium text-slate-900 dark:text-white">جاري تحميل البيانات...</p>
             </div>
           ) : filteredSuppliers.length === 0 ? (
@@ -276,7 +276,7 @@ export default function Suppliers() {
               <div key={supplier.id} className="p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex items-center">
-                    <div className="flex-shrink-0 h-10 w-10 bg-indigo-100 dark:bg-indigo-500/20 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-lg">
+                    <div className="flex-shrink-0 h-10 w-10 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-lg">
                       <Store className="w-5 h-5" />
                     </div>
                     <div className="ml-3 mr-3">
@@ -287,7 +287,7 @@ export default function Suppliers() {
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleOpenModal(supplier)}
-                        className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors"
+                        className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
@@ -306,7 +306,7 @@ export default function Suppliers() {
                     href={supplier.profile_link} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="inline-flex items-center text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-3 py-2 rounded-lg w-full justify-center font-medium"
+                    className="inline-flex items-center text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-3 py-2 rounded-lg w-full justify-center font-medium"
                   >
                     <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
                     فتح بروفايل المورد
@@ -335,7 +335,7 @@ export default function Suppliers() {
             {/* Header */}
             <div className="bg-gray-50/80 dark:bg-slate-800/80 px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center shrink-0 rounded-t-2xl">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2" id="modal-title">
-                {editingSupplier ? <Edit2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> : <Plus className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
+                {editingSupplier ? <Edit2 className="w-5 h-5 text-blue-600 dark:text-blue-400" /> : <Plus className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
                 {editingSupplier ? 'تعديل بيانات المورد' : 'إضافة مورد جديد'}
               </h3>
               <button onClick={handleCloseModal} className="text-gray-400 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-200 transition-colors rounded-full p-1 hover:bg-gray-200 dark:hover:bg-slate-700">
@@ -359,7 +359,7 @@ export default function Suppliers() {
                         type="text"
                         id="name"
                         required
-                        className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                        className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         placeholder="مثال: علي إكسبرس"
@@ -376,7 +376,7 @@ export default function Suppliers() {
                           id="profile_link"
                           required
                           dir="ltr"
-                          className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 pl-10 pr-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-left"
+                          className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 pl-10 pr-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-left"
                           value={formData.profile_link}
                           onChange={(e) => setFormData({ ...formData, profile_link: e.target.value })}
                           placeholder="https://example.com/profile"
@@ -396,7 +396,7 @@ export default function Suppliers() {
                     <textarea
                       id="notes"
                       rows={3}
-                      className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white resize-none"
+                      className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white resize-none"
                       value={formData.notes}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                       placeholder="أي ملاحظات إضافية حول المورد..."
@@ -410,7 +410,7 @@ export default function Suppliers() {
               <div className="bg-gray-50 dark:bg-slate-800/80 px-6 py-4 border-t border-gray-100 dark:border-slate-700 sm:flex sm:flex-row-reverse gap-3 shrink-0 rounded-b-2xl">
                 <button
                   type="submit"
-                  className="w-full inline-flex justify-center items-center rounded-lg border border-transparent shadow-sm px-5 py-2.5 bg-indigo-600 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:w-auto transition-colors"
+                  className="w-full inline-flex justify-center items-center rounded-lg border border-transparent shadow-sm px-5 py-2.5 bg-blue-600 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:w-auto transition-colors"
                 >
                   <CheckCircle className="w-4 h-4 ml-2" />
                   حفظ بيانات المورد
@@ -418,7 +418,7 @@ export default function Suppliers() {
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="mt-3 w-full inline-flex justify-center items-center rounded-lg border border-gray-300 dark:border-slate-600 shadow-sm px-5 py-2.5 bg-white dark:bg-slate-700 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto transition-colors"
+                  className="mt-3 w-full inline-flex justify-center items-center rounded-lg border border-gray-300 dark:border-slate-600 shadow-sm px-5 py-2.5 bg-white dark:bg-slate-700 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto transition-colors"
                 >
                   إلغاء
                 </button>

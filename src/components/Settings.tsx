@@ -478,7 +478,7 @@ export default function Settings() {
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">اختر الصفحة / القسم</label>
               <select
-                className="block w-full border border-gray-300 dark:border-slate-600 rounded-xl shadow-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                className="block w-full border border-gray-300 dark:border-slate-600 rounded-xl shadow-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                 value={exportTable}
                 onChange={(e) => setExportTable(e.target.value)}
               >
@@ -493,22 +493,22 @@ export default function Settings() {
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">صيغة الملف</label>
               <div className="grid grid-cols-2 gap-3">
-                <label className={`flex items-center justify-center gap-2 px-3 py-2.5 border rounded-xl cursor-pointer transition-all ${exportFormat === 'excel' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400' : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600'}`}>
+                <label className={`flex items-center justify-center gap-2 px-3 py-2.5 border rounded-xl cursor-pointer transition-all ${exportFormat === 'excel' ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400' : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600'}`}>
                   <input type="radio" name="format" value="excel" checked={exportFormat === 'excel'} onChange={() => setExportFormat('excel')} className="sr-only" />
                   <FileSpreadsheet className="w-4 h-4" />
                   <span className="text-sm font-medium">Excel</span>
                 </label>
-                <label className={`flex items-center justify-center gap-2 px-3 py-2.5 border rounded-xl cursor-pointer transition-all ${exportFormat === 'pdf' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400' : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600'}`}>
+                <label className={`flex items-center justify-center gap-2 px-3 py-2.5 border rounded-xl cursor-pointer transition-all ${exportFormat === 'pdf' ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400' : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600'}`}>
                   <input type="radio" name="format" value="pdf" checked={exportFormat === 'pdf'} onChange={() => setExportFormat('pdf')} className="sr-only" />
                   <FileIcon className="w-4 h-4" />
                   <span className="text-sm font-medium">PDF</span>
                 </label>
-                <label className={`flex items-center justify-center gap-2 px-3 py-2.5 border rounded-xl cursor-pointer transition-all ${exportFormat === 'csv' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400' : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600'}`}>
+                <label className={`flex items-center justify-center gap-2 px-3 py-2.5 border rounded-xl cursor-pointer transition-all ${exportFormat === 'csv' ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400' : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600'}`}>
                   <input type="radio" name="format" value="csv" checked={exportFormat === 'csv'} onChange={() => setExportFormat('csv')} className="sr-only" />
                   <FileText className="w-4 h-4" />
                   <span className="text-sm font-medium">CSV</span>
                 </label>
-                <label className={`flex items-center justify-center gap-2 px-3 py-2.5 border rounded-xl cursor-pointer transition-all ${exportFormat === 'json' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400' : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600'}`}>
+                <label className={`flex items-center justify-center gap-2 px-3 py-2.5 border rounded-xl cursor-pointer transition-all ${exportFormat === 'json' ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400' : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600'}`}>
                   <input type="radio" name="format" value="json" checked={exportFormat === 'json'} onChange={() => setExportFormat('json')} className="sr-only" />
                   <FileJson className="w-4 h-4" />
                   <span className="text-sm font-medium">JSON</span>
@@ -538,14 +538,14 @@ export default function Settings() {
       <div className="bg-white dark:bg-slate-800 shadow-sm rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors duration-200">
         <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className="bg-indigo-100 dark:bg-indigo-500/20 p-2 rounded-lg">
-              <Store className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <div className="bg-blue-100 dark:bg-blue-500/20 p-2 rounded-lg">
+              <Store className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             </div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">إعدادات الموردين وسعر الصرف</h2>
           </div>
           <button
             onClick={() => handleOpenModal()}
-            className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-all active:scale-[0.98]"
+            className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-xl text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all active:scale-[0.98]"
           >
             <Plus className="w-5 h-5 ml-2 -mr-1" />
             إضافة مورد جديد
@@ -579,7 +579,7 @@ export default function Settings() {
                       <div className="text-sm font-bold text-slate-900 dark:text-white">{supplier.name}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-medium bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-medium bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400">
                         {supplier.multiplier.toLocaleString()}
                       </span>
                     </td>
@@ -587,7 +587,7 @@ export default function Settings() {
                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => handleOpenModal(supplier)}
-                          className="p-2 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors"
+                          className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
                           title="تعديل"
                         >
                           <Edit2 className="w-4 h-4" />
@@ -646,7 +646,7 @@ export default function Settings() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-medium ${
                         log.user_role === 'admin' 
-                          ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400'
+                          ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400'
                           : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
                       }`}>
                         {log.user_role === 'admin' ? 'مدير' : 'مشاهد'}
@@ -675,7 +675,7 @@ export default function Settings() {
           <div className="relative bg-white dark:bg-slate-800 rounded-2xl text-right shadow-2xl w-full max-w-md border border-gray-100 dark:border-slate-700 flex flex-col animate-in fade-in zoom-in-95 duration-200 transition-colors">
             <div className="bg-gray-50/80 dark:bg-slate-800/80 px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center shrink-0 rounded-t-2xl">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2" id="modal-title">
-                {editingSupplier ? <Edit2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> : <Plus className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
+                {editingSupplier ? <Edit2 className="w-5 h-5 text-blue-600 dark:text-blue-400" /> : <Plus className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
                 {editingSupplier ? 'تعديل المورد' : 'إضافة مورد جديد'}
               </h3>
               <button onClick={handleCloseModal} className="text-gray-400 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-200 transition-colors rounded-full p-1 hover:bg-gray-200 dark:hover:bg-slate-700">
@@ -691,7 +691,7 @@ export default function Settings() {
                     type="text"
                     id="name"
                     required
-                    className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                    className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="مثال: علي إكسبرس، أمازون..."
@@ -705,7 +705,7 @@ export default function Settings() {
                     required
                     min="0"
                     step="0.01"
-                    className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                    className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     value={formData.multiplier}
                     onChange={(e) => setFormData({ ...formData, multiplier: Number(e.target.value) })}
                     placeholder="مثال: 1500"
@@ -716,7 +716,7 @@ export default function Settings() {
               <div className="bg-gray-50 dark:bg-slate-800/80 px-6 py-4 border-t border-gray-100 dark:border-slate-700 sm:flex sm:flex-row-reverse gap-3 shrink-0 rounded-b-2xl">
                 <button
                   type="submit"
-                  className="w-full inline-flex justify-center items-center rounded-lg border border-transparent shadow-sm px-5 py-2.5 bg-indigo-600 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:w-auto transition-colors"
+                  className="w-full inline-flex justify-center items-center rounded-lg border border-transparent shadow-sm px-5 py-2.5 bg-blue-600 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:w-auto transition-colors"
                 >
                   <CheckCircle className="w-4 h-4 ml-2" />
                   حفظ البيانات
@@ -724,7 +724,7 @@ export default function Settings() {
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="mt-3 w-full inline-flex justify-center items-center rounded-lg border border-gray-300 dark:border-slate-600 shadow-sm px-5 py-2.5 bg-white dark:bg-slate-700 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto transition-colors"
+                  className="mt-3 w-full inline-flex justify-center items-center rounded-lg border border-gray-300 dark:border-slate-600 shadow-sm px-5 py-2.5 bg-white dark:bg-slate-700 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto transition-colors"
                 >
                   إلغاء
                 </button>

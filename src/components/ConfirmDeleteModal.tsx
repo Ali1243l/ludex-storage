@@ -42,7 +42,7 @@ export default function ConfirmDeleteModal({
             <input
               id="dontShowAgain"
               type="checkbox"
-              className="w-4 h-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-slate-500 rounded focus:ring-indigo-500 dark:focus:ring-indigo-400 bg-white dark:bg-slate-800"
+              className="w-4 h-4 text-blue-600 dark:text-blue-500 border-gray-300 dark:border-slate-500 rounded focus:ring-blue-500 dark:focus:ring-blue-400 bg-white dark:bg-slate-800"
               checked={dontShowAgain}
               onChange={(e) => setDontShowAgain(e.target.checked)}
             />
@@ -60,7 +60,7 @@ export default function ConfirmDeleteModal({
             </button>
             <button
               onClick={onClose}
-              className="flex-1 inline-flex justify-center items-center rounded-lg px-4 py-2.5 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="flex-1 inline-flex justify-center items-center rounded-lg px-4 py-2.5 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               إلغاء
             </button>

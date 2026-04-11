@@ -56,13 +56,11 @@ export default function Login() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 transition-colors duration-200" dir="rtl">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <div className="bg-indigo-600 p-3 rounded-2xl shadow-lg">
-            <Package className="w-10 h-10 text-white" />
+          <div className="flex flex-col items-center leading-none" dir="ltr">
+            <span className="text-6xl font-black text-blue-600 dark:text-blue-500 tracking-tighter" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>Pixel</span>
+            <span className="text-2xl font-bold text-amber-500 tracking-widest mt-1">store</span>
           </div>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900 dark:text-white">
-          Ludex Store
-        </h2>
         <p className="mt-2 text-center text-sm text-slate-600 dark:text-slate-400">
           تسجيل الدخول للنظام
         </p>
@@ -82,10 +80,10 @@ export default function Login() {
               <button
                 onClick={handleGoogleLogin}
                 disabled={isLoading}
-                className="w-full flex justify-center items-center py-3 px-4 border border-gray-300 dark:border-slate-600 rounded-xl shadow-sm text-sm font-medium text-slate-700 dark:text-white bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="w-full flex justify-center items-center py-3 px-4 border border-gray-300 dark:border-slate-600 rounded-xl shadow-sm text-sm font-medium text-slate-700 dark:text-white bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {isLoading ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600 dark:border-white"></div>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 dark:border-white"></div>
                 ) : (
                   <>
                     <svg className="w-5 h-5 ml-2" viewBox="0 0 24 24">

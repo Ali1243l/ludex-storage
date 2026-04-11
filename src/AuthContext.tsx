@@ -23,6 +23,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const checkUser = async (session: any) => {
       if (session?.user) {
         setToken(session.access_token);
+        const userEmail = session.user.email;
+        
+        // Bootstrap Admin: Automatically approve this specific email
+        const ADMIN_EMAIL = 'abutrabali40@gmail.com';
+        const isSuperAdmin = userEmail === ADMIN_EMAIL;
+
+        if (isSuperAdmin) {
+          console.log("Super Admin detected, bypassing checks...");
+          setRole('admin');
+          setIsApproved(true);
+          
+          // Try to ensure the record exists in DB as admin
+          await supabase.from('app_users').upsert({
+            id: session.user.id,
+            email: userEmail,
+            role: 'admin',
+            is_approved: true
+          });
+          
+          setIsLoading(false);
+          return;
+        }
         
         // Check if user exists in app_users
         const { data: userRecord, error } = await supabase
@@ -106,7 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400"></div>
       </div>
     );
   }
