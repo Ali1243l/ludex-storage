@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { Activity, Clock, LogIn, LogOut, Timer, Smartphone, Monitor, Laptop } from 'lucide-react';
+import { Activity, Clock, LogIn, LogOut, Timer, Smartphone, Monitor, Laptop, Trash2 } from 'lucide-react';
+import ConfirmDeleteModal from './ConfirmDeleteModal';
 
 interface UserSession {
   id: string;
@@ -16,6 +17,8 @@ interface UserSession {
 export default function Sessions() {
   const [sessions, setSessions] = useState<UserSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   useEffect(() => {
     fetchSessions();
@@ -65,6 +68,26 @@ export default function Sessions() {
     return <Monitor className="w-4 h-4 text-slate-500" />;
   };
 
+  const handleClearSessions = async () => {
+    setIsClearing(true);
+    try {
+      // Delete all sessions except the current active one (optional, but let's just delete all for simplicity as requested)
+      const { error } = await supabase
+        .from('user_sessions')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Dummy condition to delete all rows
+      
+      if (!error) {
+        setSessions([]);
+      }
+    } catch (error) {
+      console.error('Error clearing sessions:', error);
+    } finally {
+      setIsClearing(false);
+      setIsClearModalOpen(false);
+    }
+  };
+
   return (
     <div className="space-y-6" dir="rtl">
       <div className="flex justify-between items-center">
@@ -77,12 +100,22 @@ export default function Sessions() {
             مراقبة أوقات دخول وخروج المستخدمين والمدة التي قضوها في النظام
           </p>
         </div>
-        <button
-          onClick={fetchSessions}
-          className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
-        >
-          تحديث السجل
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsClearModalOpen(true)}
+            disabled={sessions.length === 0 || isClearing}
+            className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span className="hidden sm:inline">مسح السجل</span>
+          </button>
+          <button
+            onClick={fetchSessions}
+            className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+          >
+            تحديث السجل
+          </button>
+        </div>
       </div>
 
       <div className="bg-white dark:bg-slate-800 shadow-sm rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -182,6 +215,14 @@ export default function Sessions() {
           </table>
         </div>
       </div>
+
+      <ConfirmDeleteModal
+        isOpen={isClearModalOpen}
+        onClose={() => setIsClearModalOpen(false)}
+        onConfirm={handleClearSessions}
+        title="مسح سجل الدخول بالكامل"
+        message="هل أنت متأكد من مسح جميع بيانات سجل الدخول؟ هذا الإجراء سيحذف جميع الجلسات السابقة ولا يمكن التراجع عنه."
+      />
     </div>
   );
 }
