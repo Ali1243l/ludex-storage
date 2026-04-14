@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Search, Calendar, AlertCircle, CheckCircle, Package, X, Wallet, LayoutDashboard, Users, Box, ShoppingCart, Moon, Sun, Settings, LogOut, Store } from 'lucide-react';
+import Sessions from './components/Sessions';
+import { Plus, Edit2, Trash2, Search, Calendar, AlertCircle, CheckCircle, Package, X, Wallet, LayoutDashboard, Users, Box, ShoppingCart, Moon, Sun, Settings, LogOut, Store, Activity } from 'lucide-react';
 import { Subscription } from './types';
 import Transactions from './components/Transactions';
 import Customers from './components/Customers';
@@ -27,7 +28,7 @@ const getDaysRemaining = (expirationDate: string) => {
 
 export default function App() {
   const { role, token, logout, isApproved } = useAuth();
-  const [activePage, setActivePage] = useState<'subscriptions' | 'finances' | 'customers' | 'products' | 'sales' | 'settings' | 'suppliers' | 'users'>('subscriptions');
+  const [activePage, setActivePage] = useState<'subscriptions' | 'finances' | 'customers' | 'products' | 'sales' | 'settings' | 'suppliers' | 'users' | 'sessions'>('subscriptions');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -222,6 +223,7 @@ export default function App() {
     ...(role === 'admin' ? [
       { id: 'suppliers', label: 'الموردين', icon: Store },
       { id: 'users', label: 'المستخدمين', icon: Users },
+      { id: 'sessions', label: 'سجل الدخول', icon: Activity },
       { id: 'settings', label: 'الإعدادات', icon: Settings }
     ] : []),
   ] as const;
@@ -684,6 +686,8 @@ export default function App() {
           <SettingsPage />
         ) : activePage === 'users' ? (
           <UsersPage />
+        ) : activePage === 'sessions' ? (
+          <Sessions />
         ) : (
           <Customers />
         )}

@@ -42,6 +42,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             is_approved: true
           });
           
+          // Session Tracking
+          try {
+            let sid = sessionStorage.getItem('current_session_id');
+            if (!sid) {
+              const { data: sessionData } = await supabase.from('user_sessions').insert([{ user_id: session.user.id }]).select().single();
+              if (sessionData) sessionStorage.setItem('current_session_id', sessionData.id);
+            }
+          } catch (e) {}
+          
           setIsLoading(false);
           return;
         }
@@ -90,6 +99,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log("User record found:", userRecord);
           setRole(userRecord.role as Role);
           setIsApproved(userRecord.is_approved);
+          
+          if (userRecord.is_approved) {
+            // Session Tracking
+            try {
+              let sid = sessionStorage.getItem('current_session_id');
+              if (!sid) {
+                const { data: sessionData } = await supabase.from('user_sessions').insert([{ user_id: session.user.id }]).select().single();
+                if (sessionData) sessionStorage.setItem('current_session_id', sessionData.id);
+              }
+            } catch (e) {}
+          }
         }
       } else {
         setToken(null);
@@ -109,7 +129,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       checkUser(session);
     });
 
-    return () => subscription.unsubscribe();
+    // Track window close for session logout
+    const handleUnload = () => {
+      const sid = sessionStorage.getItem('current_session_id');
+      if (sid) {
+        // Fire and forget update
+        supabase.from('user_sessions').update({ logout_time: new Date().toISOString() }).eq('id', sid).then();
+      }
+    };
+    window.addEventListener('beforeunload', handleUnload);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('beforeunload', handleUnload);
+    };
   }, []);
 
   const login = (newToken: string, newRole: Role) => {
@@ -119,6 +152,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    try {
+      const sid = sessionStorage.getItem('current_session_id');
+      if (sid) {
+        await supabase.from('user_sessions').update({ logout_time: new Date().toISOString() }).eq('id', sid);
+        sessionStorage.removeItem('current_session_id');
+      }
+    } catch (e) {}
+    
     await supabase.auth.signOut();
     setToken(null);
     setRole(null);

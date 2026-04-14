@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <path d="M30 25 h 25 a 15 15 0 0 1 15 15 v 5 a 15 15 0 0 1 -15 15 h -10 v 15 h -15 z" fill="#2563eb"/>
-  <rect x="60" y="60" width="15" height="15" rx="3" fill="#f59e0b"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <rect width="200" height="200" fill="#ffffff"/>
+  <text x="100" y="110" font-family="system-ui, -apple-system, sans-serif" font-size="70" font-weight="900" fill="#2563eb" text-anchor="middle" letter-spacing="-2">Pixel</text>
+  <text x="100" y="150" font-family="system-ui, -apple-system, sans-serif" font-size="30" font-weight="bold" fill="#f59e0b" text-anchor="middle" letter-spacing="4">store</text>
 </svg>
