@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 
 type Role = 'admin' | 'viewer' | 'pending' | null;
@@ -18,11 +18,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [isApproved, setIsApproved] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
+  const sessionCreationInProgress = useRef(false);
+  const currentTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const getDeviceInfo = () => {
+      const ua = navigator.userAgent;
+      if (/mobile/i.test(ua)) {
+        if (/iPhone/i.test(ua)) return 'iPhone';
+        if (/iPad/i.test(ua)) return 'iPad';
+        if (/Android/i.test(ua)) return 'Android Mobile';
+        return 'Mobile Device';
+      }
+      if (/Macintosh/i.test(ua)) return 'Mac';
+      if (/Windows/i.test(ua)) return 'Windows PC';
+      if (/Linux/i.test(ua)) return 'Linux PC';
+      return 'Unknown Device';
+    };
+
     const checkUser = async (session: any) => {
       if (session?.user) {
         setToken(session.access_token);
+        currentTokenRef.current = session.access_token;
         const userEmail = session.user.email;
         
         // Bootstrap Admin: Automatically approve this specific email
@@ -45,11 +62,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Session Tracking
           try {
             let sid = sessionStorage.getItem('current_session_id');
-            if (!sid) {
-              const { data: sessionData } = await supabase.from('user_sessions').insert([{ user_id: session.user.id }]).select().single();
+            if (!sid && !sessionCreationInProgress.current) {
+              sessionCreationInProgress.current = true;
+              const { data: sessionData } = await supabase.from('user_sessions').insert([{ 
+                user_id: session.user.id,
+                device_info: getDeviceInfo()
+              }]).select().single();
               if (sessionData) sessionStorage.setItem('current_session_id', sessionData.id);
+              sessionCreationInProgress.current = false;
             }
-          } catch (e) {}
+          } catch (e) {
+            sessionCreationInProgress.current = false;
+          }
           
           setIsLoading(false);
           return;
@@ -104,15 +128,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Session Tracking
             try {
               let sid = sessionStorage.getItem('current_session_id');
-              if (!sid) {
-                const { data: sessionData } = await supabase.from('user_sessions').insert([{ user_id: session.user.id }]).select().single();
+              if (!sid && !sessionCreationInProgress.current) {
+                sessionCreationInProgress.current = true;
+                const { data: sessionData } = await supabase.from('user_sessions').insert([{ 
+                  user_id: session.user.id,
+                  device_info: getDeviceInfo()
+                }]).select().single();
                 if (sessionData) sessionStorage.setItem('current_session_id', sessionData.id);
+                sessionCreationInProgress.current = false;
               }
-            } catch (e) {}
+            } catch (e) {
+              sessionCreationInProgress.current = false;
+            }
           }
         }
       } else {
         setToken(null);
+        currentTokenRef.current = null;
         setRole(null);
         setIsApproved(false);
       }
@@ -132,16 +164,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Track window close for session logout
     const handleUnload = () => {
       const sid = sessionStorage.getItem('current_session_id');
-      if (sid) {
-        // Fire and forget update
-        supabase.from('user_sessions').update({ logout_time: new Date().toISOString() }).eq('id', sid).then();
+      if (sid && currentTokenRef.current) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        if (supabaseUrl && supabaseKey) {
+          const url = `${supabaseUrl}/rest/v1/user_sessions?id=eq.${sid}`;
+          fetch(url, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${currentTokenRef.current}`,
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({ logout_time: new Date().toISOString() }),
+            keepalive: true
+          }).catch(() => {});
+        }
       }
     };
     window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        handleUnload();
+      }
+    });
 
     return () => {
       subscription.unsubscribe();
       window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('visibilitychange', handleUnload);
     };
   }, []);
 

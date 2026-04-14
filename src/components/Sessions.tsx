@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { Activity, Clock, LogIn, LogOut, Timer } from 'lucide-react';
+import { Activity, Clock, LogIn, LogOut, Timer, Smartphone, Monitor, Laptop } from 'lucide-react';
 
 interface UserSession {
   id: string;
   user_id: string;
   login_time: string;
   logout_time: string | null;
+  device_info: string | null;
   app_users: {
     email: string;
   };
@@ -53,6 +54,17 @@ export default function Sessions() {
     return `${hours} ساعة و ${remainingMinutes} دقيقة`;
   };
 
+  const getDeviceIcon = (device: string | null) => {
+    if (!device) return <Monitor className="w-4 h-4 text-slate-400" />;
+    if (device.includes('iPhone') || device.includes('Android Mobile') || device.includes('Mobile')) {
+      return <Smartphone className="w-4 h-4 text-blue-500" />;
+    }
+    if (device.includes('iPad')) {
+      return <Laptop className="w-4 h-4 text-indigo-500" />;
+    }
+    return <Monitor className="w-4 h-4 text-slate-500" />;
+  };
+
   return (
     <div className="space-y-6" dir="rtl">
       <div className="flex justify-between items-center">
@@ -82,6 +94,9 @@ export default function Sessions() {
                   المستخدم
                 </th>
                 <th className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  الجهاز
+                </th>
+                <th className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   وقت الدخول
                 </th>
                 <th className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -98,7 +113,7 @@ export default function Sessions() {
             <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center">
+                  <td colSpan={6} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
                       <span className="mt-2 text-sm text-slate-500 dark:text-slate-400">جاري تحميل السجل...</span>
@@ -107,7 +122,7 @@ export default function Sessions() {
                 </tr>
               ) : sessions.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
                     لا توجد جلسات مسجلة حتى الآن.
                   </td>
                 </tr>
@@ -122,6 +137,12 @@ export default function Sessions() {
                         <span className="text-sm font-medium text-slate-900 dark:text-white">
                           {session.app_users?.email || 'مستخدم غير معروف'}
                         </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                        {getDeviceIcon(session.device_info)}
+                        <span className="mr-2">{session.device_info || 'غير معروف'}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

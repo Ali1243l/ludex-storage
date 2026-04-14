@@ -696,7 +696,7 @@ export default function App() {
 
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 z-30 pb-safe transition-colors duration-200">
-        <div className="flex justify-around items-center h-16 px-2">
+        <div className="flex overflow-x-auto hide-scrollbar items-center h-16 px-4 gap-6">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activePage === item.id;
@@ -704,12 +704,12 @@ export default function App() {
               <button
                 key={item.id}
                 onClick={() => setActivePage(item.id)}
-                className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${
+                className={`flex flex-col items-center justify-center min-w-[60px] h-full space-y-1 transition-colors shrink-0 ${
                   isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'fill-blue-50 dark:fill-blue-500/20' : ''}`} />
-                <span className="text-[10px] font-medium">{item.label}</span>
+                <span className="text-[10px] font-medium whitespace-nowrap">{item.label}</span>
               </button>
             );
           })}
