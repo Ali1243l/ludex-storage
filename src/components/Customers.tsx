@@ -17,9 +17,10 @@ export default function Customers() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<Omit<Customer, 'id'>>({
+  const [formData, setFormData] = useState<Omit<Customer, 'id' | 'customer_number'>>({
     name: '',
     username: '',
+    customer_code: '',
     purchases: [],
     notes: '',
   });
@@ -66,6 +67,7 @@ export default function Customers() {
       setFormData({
         name: customer.name,
         username: customer.username,
+        customer_code: customer.customer_code || '',
         purchases: customer.purchases ? [...customer.purchases] : [],
         notes: customer.notes || '',
       });
@@ -74,6 +76,7 @@ export default function Customers() {
       setFormData({
         name: '',
         username: '',
+        customer_code: '',
         purchases: [],
         notes: '',
       });
@@ -268,6 +271,7 @@ export default function Customers() {
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">التسلسل (ID)</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">اسم الزبون</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">يوزر الحساب</th>
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">كود الزبون</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">عدد المرات</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">آخر شراء</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">الملاحظات</th>
@@ -277,7 +281,7 @@ export default function Customers() {
             <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan={8} className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
                     <div className="flex flex-col items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mb-4"></div>
                       <p className="text-lg font-medium text-slate-900 dark:text-white">جاري تحميل البيانات...</p>
@@ -287,7 +291,7 @@ export default function Customers() {
                 </tr>
               ) : filteredCustomers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan={8} className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
                     <div className="flex flex-col items-center justify-center">
                       <Users className="w-12 h-12 text-slate-300 dark:text-slate-600 mb-4" />
                       <p className="text-lg font-medium text-slate-900 dark:text-white">لا يوجد زبائن</p>
@@ -323,6 +327,9 @@ export default function Customers() {
                           <AtSign className="w-4 h-4 ml-1 text-gray-400 dark:text-slate-500" />
                           <span dir="ltr" className="text-right">{customer.username || '-'}</span>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-slate-400 font-mono">
+                        {customer.customer_code || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-500/10 text-blue-800 dark:text-blue-400">
@@ -522,6 +529,19 @@ export default function Customers() {
                           placeholder="username"
                         />
                       </div>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label htmlFor="customer_code" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">كود الزبون (اختياري)</label>
+                      <input
+                        type="text"
+                        id="customer_code"
+                        dir="ltr"
+                        className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-left"
+                        value={formData.customer_code}
+                        onChange={(e) => setFormData({ ...formData, customer_code: e.target.value })}
+                        placeholder="كود خاص للبحث عنه بسرعة..."
+                      />
+                      <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">يمكنك استخدام هذا الكود في سجل المبيعات لربط الشراء بهذا الزبون مباشرة بدلاً من دقة الاسم او اليوزر.</p>
                     </div>
                   </div>
                 </div>

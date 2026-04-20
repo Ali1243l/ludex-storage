@@ -31,6 +31,7 @@ export interface Purchase {
 export interface Customer {
   id: string;
   customer_number?: number;
+  customer_code?: string;
   name: string;
   username: string;
   purchases: Purchase[];
@@ -62,6 +63,7 @@ export interface SaleRecord {
   id: string;
   customerName: string;
   customerUsername: string;
+  customerCode?: string;
   date: string;
   productName: string;
   price: number;

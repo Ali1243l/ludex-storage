@@ -34,7 +34,7 @@ const parseLinks = (linksStr?: string): ProductLinkObj[] => {
 export default function Sales() {
   const { role } = useAuth();
   const [sales, setSales] = useState<SaleRecord[]>([]);
-  const [customersList, setCustomersList] = useState<{name: string, username: string}[]>([]);
+  const [customersList, setCustomersList] = useState<{name: string, username: string, customer_code?: string}[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -46,6 +46,7 @@ export default function Sales() {
   const [formData, setFormData] = useState<Omit<SaleRecord, 'id' | 'productLink'> & { productLinks: ProductLinkObj[] }>({
     customerName: '',
     customerUsername: '',
+    customerCode: '',
     date: new Date().toISOString().split('T')[0],
     productName: '',
     price: 0,
@@ -60,8 +61,8 @@ export default function Sales() {
       if (data) setSales(data as SaleRecord[]);
       if (error) console.error("Error fetching sales:", error);
       
-      const { data: cData } = await supabase.from('customers').select('name, username');
-      if (cData) setCustomersList(cData as {name: string, username: string}[]);
+      const { data: cData } = await supabase.from('customers').select('name, username, customer_code');
+      if (cData) setCustomersList(cData as {name: string, username: string, customer_code: string}[]);
 
       setIsLoading(false);
     };
@@ -90,6 +91,7 @@ export default function Sales() {
       setFormData({
         customerName: sale.customerName,
         customerUsername: sale.customerUsername,
+        customerCode: sale.customerCode || '',
         date: sale.date,
         productName: sale.productName,
         price: sale.price,
@@ -101,6 +103,7 @@ export default function Sales() {
       setFormData({
         customerName: '',
         customerUsername: '',
+        customerCode: '',
         date: new Date().toISOString().split('T')[0],
         productName: '',
         price: 0,
@@ -117,16 +120,22 @@ export default function Sales() {
   };
 
   const syncWithCustomers = async (currentFormData: typeof formData) => {
-    if (!currentFormData.customerUsername && !currentFormData.customerName) return;
+    if (!currentFormData.customerCode && !currentFormData.customerUsername && !currentFormData.customerName) return;
     try {
       // Clean inputs
       let searchUsername = currentFormData.customerUsername ? currentFormData.customerUsername.replace('@', '').trim() : '';
       let searchName = currentFormData.customerName ? currentFormData.customerName.trim() : '';
+      let searchCode = currentFormData.customerCode ? currentFormData.customerCode.trim() : '';
 
-      // Find exact matching user (try username first if provided, else try name)
+      // Find exact matching user (try code first, then username, then name)
       let existingCustomers: any[] | null = null;
       
-      if (searchUsername) {
+      if (searchCode) {
+        const { data } = await supabase.from('customers').select('*').eq('customer_code', searchCode).limit(1);
+        existingCustomers = data;
+      }
+
+      if ((!existingCustomers || existingCustomers.length === 0) && searchUsername) {
         const { data } = await supabase.from('customers').select('*').ilike('username', searchUsername).limit(1);
         existingCustomers = data;
       }
@@ -152,6 +161,7 @@ export default function Sales() {
           const { error: insErr } = await supabase.from('customers').insert([{
               name: searchName || 'زبون غير معروف',
               username: searchUsername || '',
+              customer_code: searchCode || null,
               customer_number: nextNumber,
               purchases: [purchaseInfo],
               notes: 'تمت الإضافة تلقائياً من سجل البيع'
@@ -171,6 +181,7 @@ export default function Sales() {
     const dataToSubmit = {
       customerName: formData.customerName,
       customerUsername: formData.customerUsername,
+      customerCode: formData.customerCode,
       date: formData.date,
       productName: formData.productName,
       price: formData.price,
@@ -310,6 +321,7 @@ export default function Sales() {
             <thead className="bg-gray-50 dark:bg-slate-800/50">
               <tr>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">الزبون</th>
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">الكود</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">المنتج</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">السعر</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">التاريخ</th>
@@ -320,7 +332,7 @@ export default function Sales() {
             <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
               {filteredSales.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500 dark:text-slate-400">
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500 dark:text-slate-400">
                     لا توجد بيانات لعرضها. أضف سجل بيع جديد للبدء.
                   </td>
                 </tr>
@@ -343,6 +355,9 @@ export default function Sales() {
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-slate-400 font-mono">
+                      {sale.customerCode || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center text-sm text-gray-900 dark:text-white">
@@ -540,7 +555,8 @@ export default function Sales() {
                           setFormData({ 
                             ...formData, 
                             customerName: val,
-                            customerUsername: found && found.username ? found.username : formData.customerUsername
+                            customerUsername: found && found.username ? found.username : formData.customerUsername,
+                            customerCode: found && found.customer_code ? found.customer_code : formData.customerCode
                           });
                         }}
                         placeholder="مثال: محمد علي"
@@ -568,7 +584,8 @@ export default function Sales() {
                             setFormData({ 
                               ...formData, 
                               customerUsername: val,
-                              customerName: found ? found.name : formData.customerName
+                              customerName: found ? found.name : formData.customerName,
+                              customerCode: found && found.customer_code ? found.customer_code : formData.customerCode
                             });
                           }}
                           placeholder="username"
@@ -577,6 +594,31 @@ export default function Sales() {
                           {customersList.map((c, idx) => c.username ? <option key={`user-${idx}`} value={c.username}>{c.name}</option> : null)}
                         </datalist>
                       </div>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label htmlFor="customerCode" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">كود الزبون (أهم معيار للبحث)</label>
+                      <input
+                        type="text"
+                        id="customerCode"
+                        dir="ltr"
+                        list="customerCodesList"
+                        className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-left"
+                        value={formData.customerCode}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const found = customersList.find(c => c.customer_code && c.customer_code === val);
+                          setFormData({ 
+                            ...formData, 
+                            customerCode: val,
+                            customerName: found ? found.name : formData.customerName,
+                            customerUsername: found && found.username ? found.username : formData.customerUsername
+                          });
+                        }}
+                        placeholder="أدخل كود الزبون لربط السجل به..."
+                      />
+                      <datalist id="customerCodesList">
+                        {customersList.map((c, idx) => c.customer_code ? <option key={`code-${idx}`} value={c.customer_code}>{c.name}</option> : null)}
+                      </datalist>
                     </div>
                   </div>
                 </div>
