@@ -156,15 +156,18 @@ export default function Sales() {
               let searchUsername = formData.customerUsername ? formData.customerUsername.replace('@', '').trim() : '';
               let searchName = formData.customerName ? formData.customerName.trim() : '';
 
-              // Find exact matching user (try username first if provided, else name)
+              // Find exact matching user (try username first if provided, else try name)
+              let existingCustomers: any[] | null = null;
+              
               if (searchUsername) {
-                query = query.ilike('username', searchUsername);
-              } else if (searchName) {
-                query = query.ilike('name', searchName);
+                const { data } = await supabase.from('customers').select('*').ilike('username', searchUsername).limit(1);
+                existingCustomers = data;
               }
-             
-             const { data: existingCustomers, error: fetchErr } = await query.limit(1);
-             if (fetchErr) console.error("Error fetching matching customer:", fetchErr);
+              
+              if ((!existingCustomers || existingCustomers.length === 0) && searchName) {
+                const { data } = await supabase.from('customers').select('*').ilike('name', searchName).limit(1);
+                existingCustomers = data;
+              }
 
              const detailsString = `${formData.productName} | السعر: ${formData.price}${formData.notes ? ' | ملاحظات: ' + formData.notes : ''}`;
              const purchaseInfo = { id: generateId(), date: formData.date, details: detailsString };
