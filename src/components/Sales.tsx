@@ -128,106 +128,73 @@ export default function Sales() {
     let finalCustomerUsername = formData.customerUsername ? formData.customerUsername.replace('@', '').trim().toLowerCase() : '';
     let finalCustomerName = formData.customerName ? formData.customerName.trim() : '';
 
-    console.log("=== DEBUGGING START ===");
-    console.log("Username from Sales (Cleaned):", finalCustomerUsername);
-    console.log("Username length:", finalCustomerUsername.length);
-    console.log("Customer Code:", finalCustomerCode);
-    console.log("Customer Name:", finalCustomerName);
-
     try {
-      // 1. One-Way Sync with Customers (Strict Rule)
-      // Only do this if it's a new sale record (don't sync repeated purchases on edit - to prevent messy duplication)
-      // Actually, standard behavior applies if we're adding a new sale.
       if (!editingSale) {
+        let existingCustomer: any = null;
         
-        let existingCustomers: any[] | null = null;
-        
-        // Exact matching logic prioritized specifically by Username as requested by user context
+        // A. Search by username first (Fast exact match single query)
         if (finalCustomerUsername) {
-           console.log(`Searching DB for username using ilike: ${finalCustomerUsername}`);
-           const { data } = await supabase.from('customers').select('*').ilike('username', finalCustomerUsername).limit(1);
-           existingCustomers = data;
-           console.log("Database search result by username:", existingCustomers);
+           const { data } = await supabase.from('customers')
+             .select('id, purchases, customer_code')
+             .eq('username', finalCustomerUsername)
+             .maybeSingle(); // Does not throw error if 0 rows, speeds up fail case
+           existingCustomer = data;
         }
         
-        // Fallback for names if username is completely empty
-        if ((!existingCustomers || existingCustomers.length === 0) && finalCustomerName && !finalCustomerUsername) {
-           console.log(`Searching DB for name using ilike: ${finalCustomerName}`);
-           const { data } = await supabase.from('customers').select('*').ilike('name', finalCustomerName).limit(1);
-           existingCustomers = data;
-           console.log("Database search result by name:", existingCustomers);
+        // Fallback search by name
+        if (!existingCustomer && finalCustomerName && !finalCustomerUsername) {
+           const { data } = await supabase.from('customers')
+             .select('id, purchases, customer_code')
+             .ilike('name', finalCustomerName)
+             .maybeSingle();
+           existingCustomer = data;
         }
 
         const purchaseInfo = { id: generateId(), date: formData.date, details: formData.productName };
 
-        if (existingCustomers && existingCustomers.length > 0) {
-          // Case B: Customer exists
-          console.log("✅ Customer FOUND. Processing UPDATE...");
-          const customer = existingCustomers[0];
+        if (existingCustomer) {
+          // B. Update existing customer's purchases cleanly
+          if (!finalCustomerCode && existingCustomer.customer_code) {
+             finalCustomerCode = existingCustomer.customer_code;
+          }
           
-          // Re-use current db code if we didn't specify one
-          if (!finalCustomerCode && customer.customer_code) finalCustomerCode = customer.customer_code;
-          
-          // 1. Fetch current exact record of the customer securely to avoid UI stale state
-          const { data: latestData } = await supabase.from('customers').select('id, purchases').eq('id', customer.id).single();
-          
-          if (latestData) {
-            // 2. Extract array precisely (Handling null, stringified JSON, or actual JSONB array)
-            let existingPurchases: any[] = [];
-            if (Array.isArray(latestData.purchases)) {
-              existingPurchases = latestData.purchases;
-            } else if (typeof latestData.purchases === 'string') {
-              try { existingPurchases = JSON.parse(latestData.purchases); } catch(e) {}
-              if (!Array.isArray(existingPurchases)) existingPurchases = [];
-            }
-
-            // 3. Append new purchase to history
-            const newPurchase = { 
-              id: Math.random().toString(36).substring(2, 9), 
-              date: formData.date, 
-              details: formData.productName 
-            };
-            const updatedPurchases = [...existingPurchases, newPurchase];
-
-            console.log("Pushing new purchases array:", updatedPurchases);
-
-            // 4. Update the JSONB array in Supabase
-            const { error: updErr } = await supabase.from('customers').update({ purchases: updatedPurchases }).eq('id', latestData.id);
-            
-            if (updErr) {
-              console.error("Error updating customer purchases:", updErr);
-            } else {
-              console.log("✅ Customer purchases updated successfully. Total count:", updatedPurchases.length);
-            }
+          let currentPurchases = existingCustomer.purchases || [];
+          if (typeof currentPurchases === 'string') {
+            try { currentPurchases = JSON.parse(currentPurchases); } catch(e) { currentPurchases = []; }
+          } else if (!Array.isArray(currentPurchases)) {
+            currentPurchases = [];
           }
 
+          const updatedPurchases = [...currentPurchases, purchaseInfo];
+          
+          await supabase.from('customers')
+            .update({ purchases: updatedPurchases })
+            .eq('id', existingCustomer.id);
+            
         } else {
-          // Case A: Customer not exists (Insert + auto generate custom code)
-          console.log("⚠️ Customer NOT FOUND. Creating NEW customer...");
-          // Create custom code formatted like #C-XXXXXXXX
+          // C. Insert new customer
           const randomCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.floor(Math.random() * 1000);
-          finalCustomerCode = randomCode; // Assign to sale record
-
-          // Get Max Number
-          const { data: maxData } = await supabase.from('customers').select('customer_number').not('customer_number', 'is', null).order('customer_number', { ascending: false }).limit(1);
+          finalCustomerCode = randomCode; 
+          
+          const { data: maxData } = await supabase.from('customers')
+            .select('customer_number')
+            .not('customer_number', 'is', null)
+            .order('customer_number', { ascending: false })
+            .limit(1);
           let nextNumber = 1;
           if (maxData && maxData.length > 0 && maxData[0].customer_number) nextNumber = maxData[0].customer_number + 1;
 
-          const { error: insErr } = await supabase.from('customers').insert([{
+          await supabase.from('customers').insert([{
             name: finalCustomerName || 'زبون غير معروف',
             username: finalCustomerUsername || null,
             customer_code: finalCustomerCode,
             customer_number: nextNumber,
             purchases: [purchaseInfo]
-            // Note strict rule: NO storing notes. Ignoring formData.notes from being transferred.
           }]);
-
-          if (insErr) console.error("Error inserting new customer from sales:", insErr);
-          else console.log("✅ New customer inserted successfully.");
         }
       }
 
-      // 2. Save the Sale Record
+      // Save to sales table
       const dataToSubmit = {
         customerName: finalCustomerName,
         customerUsername: finalCustomerUsername,
@@ -241,17 +208,12 @@ export default function Sales() {
 
       if (editingSale) {
         const { error } = await supabase.from('sales').update(dataToSubmit).eq('id', editingSale.id);
-        if (error) {
-          console.error("Error updating:", error);
-          alert(`حدث خطأ أثناء التعديل: ${error.message}`);
-        }
+        if (error) alert(`حدث خطأ أثناء التعديل: ${error.message}`);
       } else {
         const { error } = await supabase.from('sales').insert([dataToSubmit]);
-        if (error) {
-          console.error("Error inserting:", error);
-          alert(`حدث خطأ أثناء الإضافة: ${error.message}`);
-        }
+        if (error) alert(`حدث خطأ أثناء الإضافة: ${error.message}`);
       }
+      
       handleCloseModal();
     } catch (err) {
       console.error("Critical submission error:", err);
