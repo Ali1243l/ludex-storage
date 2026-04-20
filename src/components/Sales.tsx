@@ -138,13 +138,13 @@ export default function Sales() {
         
         // Exact matching logic prioritized specifically by Username as requested by user context
         if (finalCustomerUsername) {
-           const { data } = await supabase.from('customers').select('*').eq('username', finalCustomerUsername).limit(1);
+           const { data } = await supabase.from('customers').select('*').ilike('username', finalCustomerUsername).limit(1);
            existingCustomers = data;
         }
         
         // Fallback for names if username is completely empty
         if ((!existingCustomers || existingCustomers.length === 0) && finalCustomerName && !finalCustomerUsername) {
-           const { data } = await supabase.from('customers').select('*').eq('name', finalCustomerName).limit(1);
+           const { data } = await supabase.from('customers').select('*').ilike('name', finalCustomerName).limit(1);
            existingCustomers = data;
         }
 
