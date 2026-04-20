@@ -152,14 +152,16 @@ export default function Sales() {
            try {
              let query = supabase.from('customers').select('*');
              
-             let searchUsername = formData.customerUsername ? formData.customerUsername.replace('@', '').trim() : '';
-             let searchName = formData.customerName ? formData.customerName.trim() : '';
+              // Clean inputs
+              let searchUsername = formData.customerUsername ? formData.customerUsername.replace('@', '').trim() : '';
+              let searchName = formData.customerName ? formData.customerName.trim() : '';
 
-             if (searchUsername) {
-               query = query.eq('username', searchUsername);
-             } else if (searchName) {
-               query = query.eq('name', searchName);
-             }
+              // Find exact matching user (try username first if provided, else name)
+              if (searchUsername) {
+                query = query.ilike('username', searchUsername);
+              } else if (searchName) {
+                query = query.ilike('name', searchName);
+              }
              
              const { data: existingCustomers, error: fetchErr } = await query.limit(1);
              if (fetchErr) console.error("Error fetching matching customer:", fetchErr);
