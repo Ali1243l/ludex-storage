@@ -119,101 +119,102 @@ export default function Sales() {
     setEditingSale(null);
   };
 
-  const syncWithCustomers = async (currentFormData: typeof formData) => {
-    if (!currentFormData.customerCode && !currentFormData.customerUsername && !currentFormData.customerName) return;
-    try {
-      // Clean inputs
-      let searchUsername = currentFormData.customerUsername ? currentFormData.customerUsername.replace('@', '').trim() : '';
-      let searchName = currentFormData.customerName ? currentFormData.customerName.trim() : '';
-      let searchCode = currentFormData.customerCode ? currentFormData.customerCode.trim() : '';
-
-      // Find exact matching user (try code first, then username, then name)
-      let existingCustomers: any[] | null = null;
-      
-      if (searchCode) {
-        const { data } = await supabase.from('customers').select('*').eq('customer_code', searchCode).limit(1);
-        existingCustomers = data;
-      }
-
-      if ((!existingCustomers || existingCustomers.length === 0) && searchUsername) {
-        const { data } = await supabase.from('customers').select('*').ilike('username', searchUsername).limit(1);
-        existingCustomers = data;
-      }
-      
-      if ((!existingCustomers || existingCustomers.length === 0) && searchName) {
-        const { data } = await supabase.from('customers').select('*').ilike('name', searchName).limit(1);
-        existingCustomers = data;
-      }
-
-      const detailsString = `${currentFormData.productName} | السعر: ${currentFormData.price}${currentFormData.notes ? ' | ملاحظات: ' + currentFormData.notes : ''}`;
-      const purchaseInfo = { id: generateId(), date: currentFormData.date, details: detailsString };
-
-      if (existingCustomers && existingCustomers.length > 0) {
-          const customer = existingCustomers[0];
-          const updatedPurchases = customer.purchases ? [...customer.purchases, purchaseInfo] : [purchaseInfo];
-          const { error: updErr } = await supabase.from('customers').update({ purchases: updatedPurchases }).eq('id', customer.id);
-          if (updErr) console.error("Error updating customer purchases:", updErr);
-      } else {
-          const { data: maxData } = await supabase.from('customers').select('customer_number').not('customer_number', 'is', null).order('customer_number', { ascending: false }).limit(1);
-          let nextNumber = 1;
-          if (maxData && maxData.length > 0 && maxData[0].customer_number) nextNumber = maxData[0].customer_number + 1;
-          
-          const { error: insErr } = await supabase.from('customers').insert([{
-              name: searchName || 'زبون غير معروف',
-              username: searchUsername || '',
-              customer_code: searchCode || null,
-              customer_number: nextNumber,
-              purchases: [purchaseInfo],
-              notes: 'تمت الإضافة تلقائياً من سجل البيع'
-          }]);
-          if (insErr) console.error("Error inserting new customer from sales:", insErr);
-      }
-    } catch (err) {
-      console.error("Sync error:", err);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return; // Prevent double clicks and race conditions
     setIsSubmitting(true);
     
-    const dataToSubmit = {
-      customerName: formData.customerName,
-      customerUsername: formData.customerUsername,
-      customerCode: formData.customerCode,
-      date: formData.date,
-      productName: formData.productName,
-      price: formData.price,
-      notes: formData.notes,
-      productLink: JSON.stringify(formData.productLinks.filter(l => l.url.trim() !== '')),
-    };
+    let finalCustomerCode = formData.customerCode ? formData.customerCode.trim() : '';
+    let finalCustomerUsername = formData.customerUsername ? formData.customerUsername.replace('@', '').trim() : '';
+    let finalCustomerName = formData.customerName ? formData.customerName.trim() : '';
 
     try {
-      if (editingSale) {
-        const { error } = await supabase
-          .from('sales')
-          .update(dataToSubmit)
-          .eq('id', editingSale.id);
+      // 1. One-Way Sync with Customers (Strict Rule)
+      // Only do this if it's a new sale record (don't sync repeated purchases on edit - to prevent messy duplication)
+      // Actually, standard behavior applies if we're adding a new sale.
+      if (!editingSale) {
         
+        let existingCustomers: any[] | null = null;
+        
+        // Exact matching logic prioritized specifically by Username as requested by user context
+        if (finalCustomerUsername) {
+           const { data } = await supabase.from('customers').select('*').eq('username', finalCustomerUsername).limit(1);
+           existingCustomers = data;
+        }
+        
+        // Fallback for names if username is completely empty
+        if ((!existingCustomers || existingCustomers.length === 0) && finalCustomerName && !finalCustomerUsername) {
+           const { data } = await supabase.from('customers').select('*').eq('name', finalCustomerName).limit(1);
+           existingCustomers = data;
+        }
+
+        const purchaseInfo = { id: generateId(), date: formData.date, details: formData.productName };
+
+        if (existingCustomers && existingCustomers.length > 0) {
+          // Case B: Customer exists
+          const customer = existingCustomers[0];
+          
+          // Re-use current db code if we didn't specify one
+          if (!finalCustomerCode && customer.customer_code) finalCustomerCode = customer.customer_code;
+          
+          const updatedPurchases = customer.purchases ? [...customer.purchases, purchaseInfo] : [purchaseInfo];
+          
+          const { error: updErr } = await supabase.from('customers').update({ purchases: updatedPurchases }).eq('id', customer.id);
+          if (updErr) console.error("Error updating customer purchases:", updErr);
+
+        } else {
+          // Case A: Customer not exists (Insert + auto generate custom code)
+          // Create custom code formatted like #C-XXXXXXXX
+          const randomCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.floor(Math.random() * 1000);
+          finalCustomerCode = randomCode; // Assign to sale record
+
+          // Get Max Number
+          const { data: maxData } = await supabase.from('customers').select('customer_number').not('customer_number', 'is', null).order('customer_number', { ascending: false }).limit(1);
+          let nextNumber = 1;
+          if (maxData && maxData.length > 0 && maxData[0].customer_number) nextNumber = maxData[0].customer_number + 1;
+
+          const { error: insErr } = await supabase.from('customers').insert([{
+            name: finalCustomerName || 'زبون غير معروف',
+            username: finalCustomerUsername || null,
+            customer_code: finalCustomerCode,
+            customer_number: nextNumber,
+            purchases: [purchaseInfo]
+            // Note strict rule: NO storing notes. Ignoring formData.notes from being transferred.
+          }]);
+
+          if (insErr) console.error("Error inserting new customer from sales:", insErr);
+        }
+      }
+
+      // 2. Save the Sale Record
+      const dataToSubmit = {
+        customerName: finalCustomerName,
+        customerUsername: finalCustomerUsername,
+        customerCode: finalCustomerCode,
+        date: formData.date,
+        productName: formData.productName,
+        price: formData.price,
+        notes: formData.notes,
+        productLink: JSON.stringify(formData.productLinks.filter(l => l.url.trim() !== '')),
+      };
+
+      if (editingSale) {
+        const { error } = await supabase.from('sales').update(dataToSubmit).eq('id', editingSale.id);
         if (error) {
           console.error("Error updating:", error);
           alert(`حدث خطأ أثناء التعديل: ${error.message}`);
         }
       } else {
-        const { error } = await supabase
-          .from('sales')
-          .insert([dataToSubmit]);
-          
+        const { error } = await supabase.from('sales').insert([dataToSubmit]);
         if (error) {
           console.error("Error inserting:", error);
           alert(`حدث خطأ أثناء الإضافة: ${error.message}`);
-        } else {
-          // Sync with customers in the background to avoid freezing the UI
-          syncWithCustomers(formData);
         }
       }
       handleCloseModal();
+    } catch (err) {
+      console.error("Critical submission error:", err);
+      alert(`حدث خطأ غير متوقع: ${(err as Error).message}`);
     } finally {
       setIsSubmitting(false);
     }

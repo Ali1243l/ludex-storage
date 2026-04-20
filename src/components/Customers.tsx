@@ -115,9 +115,23 @@ export default function Customers() {
         nextNumber = maxData[0].customer_number + 1;
       }
 
+      let finalCustomerCode = formData.customer_code;
+      if (!finalCustomerCode || finalCustomerCode.trim() === '') {
+         finalCustomerCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.floor(Math.random() * 1000);
+      }
+
+      const payload = {
+        name: formData.name,
+        username: formData.username || null,
+        purchases: formData.purchases,
+        notes: formData.notes,
+        customer_code: finalCustomerCode,
+        customer_number: nextNumber
+      };
+
       const { error } = await supabase
         .from('customers')
-        .insert([{ ...formData, customer_number: nextNumber }]);
+        .insert([payload]);
         
       if (error) {
         console.error("Error inserting:", error);
