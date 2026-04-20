@@ -149,32 +149,45 @@ export default function Sales() {
       } else {
         // Sync with customers
         if (formData.customerUsername || formData.customerName) {
-           let query = supabase.from('customers').select('*');
-           if (formData.customerUsername) {
-             query = query.eq('username', formData.customerUsername.replace('@', ''));
-           } else {
-             query = query.eq('name', formData.customerName);
-           }
-           const { data: existingCustomers } = await query.limit(1);
+           try {
+             let query = supabase.from('customers').select('*');
+             
+             let searchUsername = formData.customerUsername ? formData.customerUsername.replace('@', '').trim() : '';
+             let searchName = formData.customerName ? formData.customerName.trim() : '';
 
-           const detailsString = `${formData.productName} | السعر: ${formData.price}${formData.notes ? ' | ملاحظات: ' + formData.notes : ''}`;
-           const purchaseInfo = { id: generateId(), date: formData.date, details: detailsString };
+             if (searchUsername) {
+               query = query.eq('username', searchUsername);
+             } else if (searchName) {
+               query = query.eq('name', searchName);
+             }
+             
+             const { data: existingCustomers, error: fetchErr } = await query.limit(1);
+             if (fetchErr) console.error("Error fetching matching customer:", fetchErr);
 
-           if (existingCustomers && existingCustomers.length > 0) {
-               const customer = existingCustomers[0];
-               const updatedPurchases = customer.purchases ? [...customer.purchases, purchaseInfo] : [purchaseInfo];
-               await supabase.from('customers').update({ purchases: updatedPurchases }).eq('id', customer.id);
-           } else {
-               const { data: maxData } = await supabase.from('customers').select('customer_number').not('customer_number', 'is', null).order('customer_number', { ascending: false }).limit(1);
-               let nextNumber = 1;
-               if (maxData && maxData.length > 0 && maxData[0].customer_number) nextNumber = maxData[0].customer_number + 1;
-               await supabase.from('customers').insert([{
-                   name: formData.customerName || 'زبون غير معروف',
-                   username: formData.customerUsername ? formData.customerUsername.replace('@', '') : undefined,
-                   customer_number: nextNumber,
-                   purchases: [purchaseInfo],
-                   notes: 'تمت الإضافة تلقائياً من سجل البيع'
-               }]);
+             const detailsString = `${formData.productName} | السعر: ${formData.price}${formData.notes ? ' | ملاحظات: ' + formData.notes : ''}`;
+             const purchaseInfo = { id: generateId(), date: formData.date, details: detailsString };
+
+             if (existingCustomers && existingCustomers.length > 0) {
+                 const customer = existingCustomers[0];
+                 const updatedPurchases = customer.purchases ? [...customer.purchases, purchaseInfo] : [purchaseInfo];
+                 const { error: updErr } = await supabase.from('customers').update({ purchases: updatedPurchases }).eq('id', customer.id);
+                 if (updErr) console.error("Error updating customer purchases:", updErr);
+             } else {
+                 const { data: maxData } = await supabase.from('customers').select('customer_number').not('customer_number', 'is', null).order('customer_number', { ascending: false }).limit(1);
+                 let nextNumber = 1;
+                 if (maxData && maxData.length > 0 && maxData[0].customer_number) nextNumber = maxData[0].customer_number + 1;
+                 
+                 const { error: insErr } = await supabase.from('customers').insert([{
+                     name: searchName || 'زبون غير معروف',
+                     username: searchUsername || '',
+                     customer_number: nextNumber,
+                     purchases: [purchaseInfo],
+                     notes: 'تمت الإضافة تلقائياً من سجل البيع'
+                 }]);
+                 if (insErr) console.error("Error inserting new customer from sales:", insErr);
+             }
+           } catch (err) {
+             console.error("Sync error:", err);
            }
         }
       }
@@ -508,7 +521,15 @@ export default function Sales() {
                         list="customersNamesList"
                         className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                         value={formData.customerName}
-                        onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const found = customersList.find(c => c.name.toLowerCase() === val.toLowerCase());
+                          setFormData({ 
+                            ...formData, 
+                            customerName: val,
+                            customerUsername: found && found.username ? found.username : formData.customerUsername
+                          });
+                        }}
                         placeholder="مثال: محمد علي"
                       />
                       <datalist id="customersNamesList">
