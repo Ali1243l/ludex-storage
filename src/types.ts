@@ -1,10 +1,12 @@
 export interface Subscription {
   id: string;
   name: string;
-  activationDate: string;
-  expirationDate: string;
+  activationDate?: string;
+  expirationDate?: string;
   notes: string;
   category: string;
+  account_username?: string;
+  account_password?: string;
 }
 
 export type TransactionType = 'expense' | 'income';
@@ -13,9 +15,11 @@ export interface Transaction {
   id: string;
   type: TransactionType;
   person: string;
+  username?: string;
   description: string;
   amount: number;
   date: string;
+  notes?: string;
 }
 
 export interface Purchase {

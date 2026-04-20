@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Sessions from './components/Sessions';
-import { Plus, Edit2, Trash2, Search, Calendar, AlertCircle, CheckCircle, Package, X, Wallet, LayoutDashboard, Users, Box, ShoppingCart, Moon, Sun, Settings, LogOut, Store, Activity } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Calendar, AlertCircle, CheckCircle, Package, X, Wallet, LayoutDashboard, Users, Box, ShoppingCart, Moon, Sun, Settings, LogOut, Store, Activity, Copy, Check, Key, AtSign } from 'lucide-react';
 import { Subscription } from './types';
 import Transactions from './components/Transactions';
 import Customers from './components/Customers';
@@ -65,7 +65,17 @@ export default function App() {
     expirationDate: '',
     notes: '',
     category: 'عام',
+    account_username: '',
+    account_password: '',
   });
+
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyText = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   useEffect(() => {
     const fetchSubscriptions = async () => {
@@ -99,10 +109,12 @@ export default function App() {
       setEditingSub(sub);
       setFormData({
         name: sub.name,
-        activationDate: sub.activationDate,
-        expirationDate: sub.expirationDate,
+        activationDate: sub.activationDate || '',
+        expirationDate: sub.expirationDate || '',
         notes: sub.notes,
         category: sub.category,
+        account_username: sub.account_username || '',
+        account_password: sub.account_password || '',
       });
     } else {
       setEditingSub(null);
@@ -112,6 +124,8 @@ export default function App() {
         expirationDate: '',
         notes: '',
         category: 'عام',
+        account_username: '',
+        account_password: '',
       });
     }
     setIsModalOpen(true);
@@ -410,7 +424,7 @@ export default function App() {
                           <div className="flex-shrink-0 h-10 w-10 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-lg">
                             {sub.name.charAt(0)}
                           </div>
-                          <div className="ml-4 mr-4">
+                          <div className="ml-4 mr-4 flex flex-col">
                             <div 
                               className="text-sm font-bold text-slate-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                               onClick={() => handleOpenModal(sub)}
@@ -418,6 +432,18 @@ export default function App() {
                               {sub.name}
                             </div>
                             {sub.notes && <div className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap break-words mt-0.5 max-h-24 overflow-y-auto custom-scrollbar max-w-[250px]">{sub.notes}</div>}
+                            {(sub.account_username || sub.account_password) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyText(`يوزر: ${sub.account_username || 'لا يوجد'}\nرمز: ${sub.account_password || 'لا يوجد'}`, `desk-${sub.id}`);
+                                }}
+                                className="flex w-fit items-center gap-1 mt-2 text-xs text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                              >
+                                {copiedId === `desk-${sub.id}` ? <Check className="w-3.5 h-3.5 text-blue-500" /> : <Copy className="w-3.5 h-3.5" />}
+                                <span className={copiedId === `desk-${sub.id}` ? "text-blue-600 dark:text-blue-400" : ""}>نسخ الحساب</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -523,18 +549,34 @@ export default function App() {
                   </div>
                   
                   <div className="grid grid-cols-2 gap-2 mt-3 text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg">
-                    <div className="flex items-center">
-                      <Calendar className="w-3.5 h-3.5 ml-1.5 text-slate-400 dark:text-slate-500" />
-                      <span>تفعيل: {sub.activationDate}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <Calendar className="w-3.5 h-3.5 ml-1.5 text-slate-400 dark:text-slate-500" />
-                      <span>انتهاء: {sub.expirationDate}</span>
-                    </div>
+                    {sub.activationDate && (
+                      <div className="flex items-center">
+                        <Calendar className="w-3.5 h-3.5 ml-1.5 text-slate-400 dark:text-slate-500" />
+                        <span>تفعيل: {sub.activationDate}</span>
+                      </div>
+                    )}
+                    {sub.expirationDate && (
+                      <div className="flex items-center">
+                        <Calendar className="w-3.5 h-3.5 ml-1.5 text-slate-400 dark:text-slate-500" />
+                        <span>انتهاء: {sub.expirationDate}</span>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="mt-3 flex flex-col gap-2">
                     <div>{getStatusBadge(sub.expirationDate)}</div>
+                    {(sub.account_username || sub.account_password) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopyText(`يوزر: ${sub.account_username || 'لا يوجد'}\nرمز: ${sub.account_password || 'لا يوجد'}`, `mob-${sub.id}`);
+                        }}
+                        className="flex w-fit items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-100 dark:bg-slate-700/50 px-2.5 py-1.5 rounded-md transition-colors"
+                      >
+                        {copiedId === `mob-${sub.id}` ? <Check className="w-3.5 h-3.5 text-blue-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span className={copiedId === `mob-${sub.id}` ? "text-blue-600 dark:text-blue-400" : ""}>نسخ معلومات الحساب</span>
+                      </button>
+                    )}
                     {sub.notes && <div className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto custom-scrollbar">{sub.notes}</div>}
                   </div>
                 </div>
@@ -601,53 +643,106 @@ export default function App() {
                 </div>
 
                 {/* Group 2: Dates */}
-                <div>
-                  <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                    التواريخ والصلاحية
-                  </h4>
-                  <div className="bg-gray-50/50 dark:bg-slate-700/30 p-4 rounded-xl border border-gray-100 dark:border-slate-600 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="activationDate" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">تاريخ التفعيل <span className="text-red-500">*</span></label>
-                      <input
-                        type="date"
-                        id="activationDate"
-                        required
-                        className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                        value={formData.activationDate}
-                        onChange={(e) => setFormData({ ...formData, activationDate: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="expirationDate" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">تاريخ الانتهاء <span className="text-red-500">*</span></label>
-                      <input
-                        type="date"
-                        id="expirationDate"
-                        required
-                        className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                        value={formData.expirationDate}
-                        onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })}
-                      />
+                {!formData.category.includes('لعب') && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                      التواريخ والصلاحية
+                    </h4>
+                    <div className="bg-gray-50/50 dark:bg-slate-700/30 p-4 rounded-xl border border-gray-100 dark:border-slate-600 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="activationDate" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">تاريخ التفعيل <span className="text-red-500">*</span></label>
+                        <input
+                          type="date"
+                          id="activationDate"
+                          required
+                          className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                          value={formData.activationDate}
+                          onChange={(e) => setFormData({ ...formData, activationDate: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="expirationDate" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">تاريخ الانتهاء <span className="text-red-500">*</span></label>
+                        <input
+                          type="date"
+                          id="expirationDate"
+                          required
+                          className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                          value={formData.expirationDate}
+                          onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
-                {/* Group 3: Notes */}
+                {/* Group 3: Notes & Additional Details */}
                 <div>
                   <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                     تفاصيل إضافية
                   </h4>
-                  <div className="bg-gray-50/50 dark:bg-slate-700/30 p-4 rounded-xl border border-gray-100 dark:border-slate-600">
-                    <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">ملاحظات</label>
-                    <textarea
-                      id="notes"
-                      rows={3}
-                      className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white resize-none"
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      placeholder="أي تفاصيل إضافية، روابط، أو معلومات حساب..."
-                    ></textarea>
+                  <div className="bg-gray-50/50 dark:bg-slate-700/30 p-4 rounded-xl border border-gray-100 dark:border-slate-600 space-y-4">
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="account_username" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">يوزر الحساب <span className="text-gray-400 font-normal">(اختياري)</span></label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <AtSign className="w-4 h-4 text-gray-400" />
+                          </div>
+                          <input
+                            type="text"
+                            id="account_username"
+                            className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 pr-10 pl-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                            value={formData.account_username}
+                            onChange={(e) => setFormData({ ...formData, account_username: e.target.value })}
+                            dir="ltr"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label htmlFor="account_password" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">رمز الحساب <span className="text-gray-400 font-normal">(اختياري)</span></label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <Key className="w-4 h-4 text-gray-400" />
+                          </div>
+                          <input
+                            type="text"
+                            id="account_password"
+                            className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 pr-10 pl-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                            value={formData.account_password}
+                            onChange={(e) => setFormData({ ...formData, account_password: e.target.value })}
+                            dir="ltr"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {(formData.account_username || formData.account_password) && (
+                      <div className="flex justify-start">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText(`يوزر: ${formData.account_username}\nرمز: ${formData.account_password}`, 'sub-form')}
+                          className="flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800"
+                        >
+                          {copiedId === 'sub-form' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          نسخ سريع مدمج
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="pt-2 border-t border-gray-200 dark:border-slate-600">
+                      <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">ملاحظات</label>
+                      <textarea
+                        id="notes"
+                        rows={3}
+                        className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white resize-none"
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        placeholder="أي تفاصيل إضافية، روابط، أو معلومات حساب..."
+                      ></textarea>
+                    </div>
                   </div>
                 </div>
 

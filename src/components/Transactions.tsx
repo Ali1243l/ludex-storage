@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Search, Calendar, DollarSign, TrendingDown, TrendingUp, User, X, FileText, CheckCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Calendar, DollarSign, TrendingDown, TrendingUp, User, X, FileText, CheckCircle, Copy, Check } from 'lucide-react';
 import { Transaction, TransactionType } from '../types';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { supabase } from '../supabaseClient';
@@ -20,10 +20,20 @@ export default function Transactions() {
 
   const [formData, setFormData] = useState<Omit<Transaction, 'id' | 'type'>>({
     person: '',
+    username: '',
     description: '',
     amount: 0,
     date: new Date().toISOString().split('T')[0],
+    notes: '',
   });
+
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -57,17 +67,21 @@ export default function Transactions() {
       setEditingTx(tx);
       setFormData({
         person: tx.person,
+        username: tx.username || '',
         description: tx.description,
         amount: tx.amount,
         date: tx.date,
+        notes: tx.notes || '',
       });
     } else {
       setEditingTx(null);
       setFormData({
         person: '',
+        username: '',
         description: '',
         amount: 0,
         date: new Date().toISOString().split('T')[0],
+        notes: '',
       });
     }
     setIsModalOpen(true);
@@ -159,7 +173,8 @@ export default function Transactions() {
   const isExpense = activeTab === 'expense';
   const ThemeIcon = isExpense ? TrendingDown : TrendingUp;
   const tabLabel = isExpense ? 'المصروفات' : 'الواردات';
-  const personLabel = isExpense ? 'من قام بالصرف' : 'من قام بالتوريد';
+  const personLabel = isExpense ? 'من قام بالصرف' : 'اسم الزبون';
+  const descriptionLabel = isExpense ? 'التفاصيل (على ماذا؟)' : 'اسم المنتج';
   const amountLabel = isExpense ? 'المبلغ المصروف' : 'المبلغ الوارد';
 
   const colorClasses = isExpense 
@@ -291,16 +306,42 @@ export default function Transactions() {
                 filteredTransactions.map((tx) => (
                   <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div 
-                        className={`flex items-center ${role === 'admin' ? 'cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors group' : ''}`}
-                        onClick={() => role === 'admin' && handleOpenModal(tx)}
-                      >
-                        <User className={`w-4 h-4 ml-2 text-gray-400 dark:text-slate-500 ${role === 'admin' ? 'group-hover:text-blue-500 transition-colors' : ''}`} />
-                        <span className={`text-sm font-medium text-gray-900 dark:text-white ${role === 'admin' ? 'group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors' : ''}`}>{tx.person}</span>
+                      <div className="flex flex-col">
+                        <div 
+                          className={`flex items-center ${role === 'admin' ? 'cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors group' : ''}`}
+                          onClick={() => role === 'admin' && handleOpenModal(tx)}
+                        >
+                          <User className={`w-4 h-4 ml-2 text-gray-400 dark:text-slate-500 ${role === 'admin' ? 'group-hover:text-blue-500 transition-colors' : ''}`} />
+                          <span className={`text-sm font-medium text-gray-900 dark:text-white ${role === 'admin' ? 'group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors' : ''}`}>
+                            {tx.person}
+                          </span>
+                        </div>
+                        {tx.username && (
+                          <div className="flex items-center mt-1 mr-6">
+                            <span className="text-xs text-slate-500 dark:text-slate-400" dir="ltr">{tx.username}</span>
+                          </div>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopy(`${tx.person}${tx.username ? `\n${tx.username}` : ''}`, tx.id);
+                          }}
+                          className="flex items-center gap-1 mt-2 mr-6 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                        >
+                          {copiedId === tx.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                          نسخ سريع
+                        </button>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900 dark:text-slate-300 whitespace-pre-wrap break-words min-w-[150px] max-w-[250px] max-h-24 overflow-y-auto custom-scrollbar">{tx.description}</div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-slate-200 whitespace-pre-wrap break-words min-w-[150px] max-w-[250px]">
+                        {tx.description}
+                      </div>
+                      {tx.notes && (
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 whitespace-pre-wrap break-words min-w-[150px] max-w-[250px]">
+                          {tx.notes}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`text-sm font-bold ${colorClasses.text} dark:opacity-90`}>
@@ -364,17 +405,32 @@ export default function Transactions() {
                     <div className={`flex-shrink-0 h-10 w-10 rounded-xl flex items-center justify-center font-bold text-lg ${colorClasses.bgLight} ${colorClasses.text}`}>
                       <User className="w-5 h-5" />
                     </div>
-                    <div className="ml-3 mr-3">
+                    <div className="ml-3 mr-3 mt-1">
                       <div 
                         className="text-sm font-bold text-slate-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                         onClick={() => handleOpenModal(tx)}
                       >
                         {tx.person}
                       </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                      {tx.username && (
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5" dir="ltr">
+                          {tx.username}
+                        </div>
+                      )}
+                      <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1">
                         <Calendar className="w-3 h-3" />
                         {tx.date}
                       </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopy(`${tx.person}${tx.username ? `\n${tx.username}` : ''}`, `mob-${tx.id}`);
+                        }}
+                        className="flex items-center gap-1 mt-2 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                      >
+                        {copiedId === `mob-${tx.id}` ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        نسخ الاسم واليوزر
+                      </button>
                     </div>
                   </div>
                   {role === 'admin' && (
@@ -403,8 +459,14 @@ export default function Transactions() {
                     </span>
                   </div>
                   <div className="border-t border-slate-200 dark:border-slate-700 pt-2 mt-2">
-                    <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">التفاصيل</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">اسم المنتج</span>
                     <p className="text-sm font-medium text-slate-900 dark:text-white whitespace-pre-wrap break-words max-h-24 overflow-y-auto custom-scrollbar">{tx.description}</p>
+                    {tx.notes && (
+                      <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 border-dashed">
+                        <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">ملاحظات</span>
+                        <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words max-h-20 overflow-y-auto custom-scrollbar">{tx.notes}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -450,11 +512,24 @@ export default function Transactions() {
                         className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                         value={formData.person}
                         onChange={(e) => setFormData({ ...formData, person: e.target.value })}
-                        placeholder="مثال: أحمد، شركة التوصيل..."
+                        placeholder={isExpense ? "مثال: أحمد، شركة التوصيل..." : "مثال: Tony Redgrave"}
                       />
                     </div>
+                    {!isExpense && (
+                      <div>
+                        <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">يوزر حساب الزبون <span className="text-gray-400 font-normal">(اختياري)</span></label>
+                        <input
+                          type="text"
+                          id="username"
+                          className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                          value={formData.username || ''}
+                          onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                          placeholder="مثال: @user_name..."
+                        />
+                      </div>
+                    )}
                     <div>
-                      <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">التفاصيل (على ماذا؟) <span className="text-red-500">*</span></label>
+                      <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{descriptionLabel} <span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         id="description"
@@ -462,7 +537,7 @@ export default function Transactions() {
                         className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                         value={formData.description}
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        placeholder={isExpense ? "مثال: شراء قرطاسية، دفع فاتورة..." : "مثال: مبيعات اليوم، اشتراك عميل..."}
+                        placeholder={isExpense ? "مثال: شراء قرطاسية، دفع فاتورة..." : "مثال: اشتراك فلكس، حساب العاب..."}
                       />
                     </div>
                   </div>
@@ -504,6 +579,25 @@ export default function Transactions() {
                         onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                       />
                     </div>
+                  </div>
+                </div>
+
+                {/* Group 3: Notes */}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                    ملاحظات إضافية
+                  </h4>
+                  <div className="bg-gray-50/50 dark:bg-slate-700/30 p-4 rounded-xl border border-gray-100 dark:border-slate-600">
+                    <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">ملاحظات <span className="text-gray-400 font-normal">(اختياري)</span></label>
+                    <textarea
+                      id="notes"
+                      rows={2}
+                      className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white custom-scrollbar"
+                      value={formData.notes || ''}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      placeholder="أية ملاحظات إضافية حول العملية..."
+                    />
                   </div>
                 </div>
 

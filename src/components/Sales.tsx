@@ -34,6 +34,7 @@ const parseLinks = (linksStr?: string): ProductLinkObj[] => {
 export default function Sales() {
   const { role } = useAuth();
   const [sales, setSales] = useState<SaleRecord[]>([]);
+  const [customersList, setCustomersList] = useState<{name: string, username: string}[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,6 +58,10 @@ export default function Sales() {
       const { data, error } = await supabase.from('sales').select('*');
       if (data) setSales(data as SaleRecord[]);
       if (error) console.error("Error fetching sales:", error);
+      
+      const { data: cData } = await supabase.from('customers').select('name, username');
+      if (cData) setCustomersList(cData as {name: string, username: string}[]);
+
       setIsLoading(false);
     };
 
@@ -141,6 +146,37 @@ export default function Sales() {
       if (error) {
         console.error("Error inserting:", error);
         alert(`حدث خطأ أثناء الإضافة: ${error.message}`);
+      } else {
+        // Sync with customers
+        if (formData.customerUsername || formData.customerName) {
+           let query = supabase.from('customers').select('*');
+           if (formData.customerUsername) {
+             query = query.eq('username', formData.customerUsername.replace('@', ''));
+           } else {
+             query = query.eq('name', formData.customerName);
+           }
+           const { data: existingCustomers } = await query.limit(1);
+
+           const detailsString = `${formData.productName} | السعر: ${formData.price}${formData.notes ? ' | ملاحظات: ' + formData.notes : ''}`;
+           const purchaseInfo = { id: generateId(), date: formData.date, details: detailsString };
+
+           if (existingCustomers && existingCustomers.length > 0) {
+               const customer = existingCustomers[0];
+               const updatedPurchases = customer.purchases ? [...customer.purchases, purchaseInfo] : [purchaseInfo];
+               await supabase.from('customers').update({ purchases: updatedPurchases }).eq('id', customer.id);
+           } else {
+               const { data: maxData } = await supabase.from('customers').select('customer_number').not('customer_number', 'is', null).order('customer_number', { ascending: false }).limit(1);
+               let nextNumber = 1;
+               if (maxData && maxData.length > 0 && maxData[0].customer_number) nextNumber = maxData[0].customer_number + 1;
+               await supabase.from('customers').insert([{
+                   name: formData.customerName || 'زبون غير معروف',
+                   username: formData.customerUsername ? formData.customerUsername.replace('@', '') : undefined,
+                   customer_number: nextNumber,
+                   purchases: [purchaseInfo],
+                   notes: 'تمت الإضافة تلقائياً من سجل البيع'
+               }]);
+           }
+        }
       }
     }
     handleCloseModal();
@@ -469,11 +505,15 @@ export default function Sales() {
                         type="text"
                         id="customerName"
                         required
+                        list="customersNamesList"
                         className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                         value={formData.customerName}
                         onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
                         placeholder="مثال: محمد علي"
                       />
+                      <datalist id="customersNamesList">
+                        {customersList.map((c, idx) => <option key={`name-${idx}`} value={c.name} />)}
+                      </datalist>
                     </div>
                     <div>
                       <label htmlFor="customerUsername" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">يوزر الزبون</label>
@@ -485,11 +525,23 @@ export default function Sales() {
                           type="text"
                           id="customerUsername"
                           dir="ltr"
+                          list="customersUsernamesList"
                           className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 pl-10 pr-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-left"
                           value={formData.customerUsername}
-                          onChange={(e) => setFormData({ ...formData, customerUsername: e.target.value })}
+                          onChange={(e) => {
+                            const val = e.target.value.replace('@', '');
+                            const found = customersList.find(c => c.username && c.username.toLowerCase() === val.toLowerCase());
+                            setFormData({ 
+                              ...formData, 
+                              customerUsername: val,
+                              customerName: found ? found.name : formData.customerName
+                            });
+                          }}
                           placeholder="username"
                         />
+                        <datalist id="customersUsernamesList">
+                          {customersList.map((c, idx) => c.username ? <option key={`user-${idx}`} value={c.username}>{c.name}</option> : null)}
+                        </datalist>
                       </div>
                     </div>
                   </div>
