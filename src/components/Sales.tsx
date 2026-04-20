@@ -137,7 +137,7 @@ export default function Sales() {
            const { data } = await supabase.from('customers')
              .select('id, purchases, customer_code')
              .eq('username', finalCustomerUsername)
-             .maybeSingle(); // Does not throw error if 0 rows, speeds up fail case
+             .maybeSingle(); 
            existingCustomer = data;
         }
         
@@ -158,17 +158,21 @@ export default function Sales() {
              finalCustomerCode = existingCustomer.customer_code;
           }
           
-          let currentPurchases = existingCustomer.purchases || [];
-          if (typeof currentPurchases === 'string') {
-            try { currentPurchases = JSON.parse(currentPurchases); } catch(e) { currentPurchases = []; }
-          } else if (!Array.isArray(currentPurchases)) {
-            currentPurchases = [];
+          let oldPurchases: any[] = [];
+          if (Array.isArray(existingCustomer.purchases)) {
+            oldPurchases = existingCustomer.purchases;
+          } else if (typeof existingCustomer.purchases === 'string') {
+            try { oldPurchases = JSON.parse(existingCustomer.purchases); } catch(e) {}
+            if (!Array.isArray(oldPurchases)) oldPurchases = [];
           }
 
-          const updatedPurchases = [...currentPurchases, purchaseInfo];
+          const updatedPurchases = [...oldPurchases, purchaseInfo];
           
           await supabase.from('customers')
-            .update({ purchases: updatedPurchases })
+            .update({ 
+               purchases: updatedPurchases,
+               purchase_count: updatedPurchases.length
+            })
             .eq('id', existingCustomer.id);
             
         } else {
@@ -189,7 +193,8 @@ export default function Sales() {
             username: finalCustomerUsername || null,
             customer_code: finalCustomerCode,
             customer_number: nextNumber,
-            purchases: [purchaseInfo]
+            purchases: [purchaseInfo],
+            purchase_count: 1
           }]);
         }
       }

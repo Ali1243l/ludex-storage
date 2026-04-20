@@ -98,7 +98,12 @@ export default function Customers() {
     if (editingCustomer) {
       const { error } = await supabase
         .from('customers')
-        .update({ ...formData, username: sanitizedUsername, name: sanitizedName })
+        .update({ 
+           ...formData, 
+           username: sanitizedUsername, 
+           name: sanitizedName,
+           purchase_count: formData.purchases.length
+        })
         .eq('id', editingCustomer.id);
       
       if (error) {
@@ -128,6 +133,7 @@ export default function Customers() {
         name: sanitizedName,
         username: sanitizedUsername,
         purchases: formData.purchases,
+        purchase_count: formData.purchases.length,
         notes: formData.notes,
         customer_code: finalCustomerCode,
         customer_number: nextNumber
