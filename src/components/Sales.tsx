@@ -125,7 +125,7 @@ export default function Sales() {
     setIsSubmitting(true);
     
     let finalCustomerCode = formData.customerCode ? formData.customerCode.trim() : '';
-    let finalCustomerUsername = formData.customerUsername ? formData.customerUsername.replace('@', '').trim() : '';
+    let finalCustomerUsername = formData.customerUsername ? formData.customerUsername.replace('@', '').trim().toLowerCase() : '';
     let finalCustomerName = formData.customerName ? formData.customerName.trim() : '';
 
     try {

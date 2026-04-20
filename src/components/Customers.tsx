@@ -91,10 +91,14 @@ export default function Customers() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const sanitizedUsername = formData.username ? formData.username.replace('@', '').trim().toLowerCase() : null;
+    const sanitizedName = formData.name ? formData.name.trim() : '';
+
     if (editingCustomer) {
       const { error } = await supabase
         .from('customers')
-        .update({ ...formData })
+        .update({ ...formData, username: sanitizedUsername, name: sanitizedName })
         .eq('id', editingCustomer.id);
       
       if (error) {
@@ -121,8 +125,8 @@ export default function Customers() {
       }
 
       const payload = {
-        name: formData.name,
-        username: formData.username || null,
+        name: sanitizedName,
+        username: sanitizedUsername,
         purchases: formData.purchases,
         notes: formData.notes,
         customer_code: finalCustomerCode,
