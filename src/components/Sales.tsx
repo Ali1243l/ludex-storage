@@ -158,22 +158,36 @@ export default function Sales() {
              finalCustomerCode = existingCustomer.customer_code;
           }
           
-          let oldPurchases: any[] = [];
-          if (Array.isArray(existingCustomer.purchases)) {
-            oldPurchases = existingCustomer.purchases;
-          } else if (typeof existingCustomer.purchases === 'string') {
-            try { oldPurchases = JSON.parse(existingCustomer.purchases); } catch(e) {}
-            if (!Array.isArray(oldPurchases)) oldPurchases = [];
+          // 1. Extract the old purchases exactly
+          let currentPurchases = existingCustomer.purchases || [];
+          if (typeof currentPurchases === 'string') {
+            try { currentPurchases = JSON.parse(currentPurchases); } catch(e) { /* ignore */ }
+          }
+          if (!Array.isArray(currentPurchases)) {
+            currentPurchases = [];
           }
 
-          const updatedPurchases = [...oldPurchases, purchaseInfo];
+          // 2. Generate the exact object structure manually, precisely matching: {"id": "short_str", "date": "...", "details": "..."}
+          const shortRandomId = Math.random().toString(36).substring(2, 9);
+          const newPurchase = { 
+            id: shortRandomId, 
+            date: formData.date, 
+            details: formData.productName 
+          };
+
+          // 3. Append to array via destructing
+          const updatedPurchases = [...currentPurchases, newPurchase];
           
-          await supabase.from('customers')
-            .update({ 
-               purchases: updatedPurchases,
-               purchase_count: updatedPurchases.length
-            })
-            .eq('id', existingCustomer.id);
+          // 4. Update the exact column exclusively
+          try {
+             const { error: syncError } = await supabase.from('customers')
+               .update({ purchases: updatedPurchases })
+               .eq('id', existingCustomer.id);
+             
+             if (syncError) console.error("Auto-sync error:", syncError);
+          } catch(e) {
+             console.error("Auto-sync catch:", e);
+          }
             
         } else {
           // C. Insert new customer
