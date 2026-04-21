@@ -138,10 +138,17 @@ export default function App() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const payload = {
+        ...formData,
+        activationDate: formData.activationDate || null,
+        expirationDate: formData.expirationDate || null,
+    };
+
     if (editingSub) {
       const { error } = await supabase
         .from('subscriptions')
-        .update({ ...formData })
+        .update(payload)
         .eq('id', editingSub.id);
       
       if (error) {
@@ -151,7 +158,7 @@ export default function App() {
     } else {
       const { error } = await supabase
         .from('subscriptions')
-        .insert([{ ...formData }]);
+        .insert([payload]);
         
       if (error) {
         console.error("Error inserting:", error);
@@ -229,7 +236,7 @@ export default function App() {
   };
 
   const navItems = [
-    { id: 'subscriptions', label: 'الاشتراكات', icon: LayoutDashboard },
+    { id: 'subscriptions', label: 'الحسابات', icon: LayoutDashboard },
     { id: 'products', label: 'المنتجات', icon: Box },
     { id: 'sales', label: 'سجل البيع', icon: ShoppingCart },
     { id: 'customers', label: 'الزبائن', icon: Users },
@@ -332,7 +339,7 @@ export default function App() {
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-4 mb-8">
               <div className="bg-white dark:bg-slate-800 overflow-hidden shadow-sm rounded-2xl border border-slate-200 dark:border-slate-700 transition-colors duration-200">
                 <div className="px-5 py-6">
-                  <dt className="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">إجمالي الاشتراكات</dt>
+                  <dt className="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">إجمالي الحسابات</dt>
                   <dd className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">{stats.total}</dd>
                 </div>
               </div>
@@ -366,7 +373,7 @@ export default function App() {
                   <input
                     type="text"
                     className="block w-full pl-3 pr-10 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-all"
-                    placeholder="ابحث عن اشتراك، ملاحظة، أو تصنيف..."
+                    placeholder="ابحث عن حساب، ملاحظة، أو تصنيف..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
@@ -377,7 +384,7 @@ export default function App() {
                     className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-xl text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all active:scale-[0.98]"
                   >
                     <Plus className="w-5 h-5 ml-2 -mr-1" />
-                    إضافة اشتراك جديد
+                    إضافة حساب جديد
                   </button>
                 )}
               </div>
@@ -387,7 +394,7 @@ export default function App() {
             <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
               <thead className="bg-slate-50 dark:bg-slate-800/50">
                 <tr>
-                  <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">اسم الاشتراك</th>
+                  <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">اسم الحساب</th>
                   <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">التصنيف</th>
                   <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">تاريخ التفعيل</th>
                   <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">تاريخ الانتهاء</th>
@@ -402,7 +409,7 @@ export default function App() {
                       <div className="flex flex-col items-center justify-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mb-4"></div>
                         <p className="text-lg font-medium text-slate-900 dark:text-white">جاري تحميل البيانات...</p>
-                        <p className="text-sm mt-1">يتم الآن جلب معلومات الاشتراكات من السحابة.</p>
+                        <p className="text-sm mt-1">يتم الآن جلب معلومات الحسابات من السحابة.</p>
                       </div>
                     </td>
                   </tr>
@@ -411,8 +418,8 @@ export default function App() {
                     <td colSpan={6} className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
                       <div className="flex flex-col items-center justify-center">
                         <Package className="w-12 h-12 text-slate-300 dark:text-slate-600 mb-4" />
-                        <p className="text-lg font-medium text-slate-900 dark:text-white">لا توجد اشتراكات</p>
-                        <p className="text-sm mt-1">أضف اشتراكاً جديداً للبدء في إدارتها.</p>
+                        <p className="text-lg font-medium text-slate-900 dark:text-white">لا توجد حسابات</p>
+                        <p className="text-sm mt-1">أضف حساباً جديداً للبدء في إدارتها.</p>
                       </div>
                     </td>
                   </tr>
@@ -507,7 +514,7 @@ export default function App() {
               <div className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
                 <div className="flex flex-col items-center justify-center">
                   <Package className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-3" />
-                  <p className="text-base font-medium text-slate-900 dark:text-white">لا توجد اشتراكات</p>
+                  <p className="text-base font-medium text-slate-900 dark:text-white">لا توجد حسابات</p>
                 </div>
               </div>
             ) : (
@@ -598,7 +605,7 @@ export default function App() {
             <div className="bg-gray-50/80 dark:bg-slate-800/80 px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center shrink-0 rounded-t-2xl">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2" id="modal-title">
                 {editingSub ? <Edit2 className="w-5 h-5 text-blue-600 dark:text-blue-400" /> : <Plus className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
-                {editingSub ? 'تعديل الاشتراك' : 'إضافة اشتراك جديد'}
+                {editingSub ? 'تعديل الحساب' : 'إضافة حساب جديد'}
               </h3>
               <button onClick={handleCloseModal} className="text-gray-400 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-200 transition-colors rounded-full p-1 hover:bg-gray-200 dark:hover:bg-slate-700">
                 <X className="w-5 h-5" />
@@ -617,7 +624,7 @@ export default function App() {
                   </h4>
                   <div className="bg-gray-50/50 dark:bg-slate-700/30 p-4 rounded-xl border border-gray-100 dark:border-slate-600 space-y-4">
                     <div>
-                      <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">اسم المنتج / الاشتراك <span className="text-red-500">*</span></label>
+                      <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">اسم المنتج / الحساب <span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         id="name"
@@ -625,7 +632,7 @@ export default function App() {
                         className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="مثال: اشتراك نتفليكس، رخصة برنامج..."
+                        placeholder="مثال: حساب ديجتال، رخصة برنامج..."
                       />
                     </div>
                     <div>
