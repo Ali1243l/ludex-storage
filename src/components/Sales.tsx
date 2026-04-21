@@ -221,14 +221,15 @@ export default function Sales() {
                person: finalCustomerName || finalCustomerCode || 'زبون غير معروف',
                username: finalCustomerUsername || '',
                description: formData.productName || 'مبيعة غير مسماة',
-               amount: formData.price || 0,
+               amount: Number(formData.price) || 0,
                date: formData.date || new Date().toISOString().split('T')[0],
                notes: 'تم تسجيل الوارد تلقائياً من نظام المبيعات',
             };
             
-            const { error: txError } = await supabase.from('transactions').insert([transactionPayload]);
-            if (txError) {
-               console.error("Error creating transaction (income):", txError);
+            const { error: revenueError } = await supabase.from('transactions').insert([transactionPayload]);
+            if (revenueError) {
+               console.error("Revenue Insert Failed:", revenueError);
+               alert(`لم نتمكن من إضافة العملية كوارد: ${revenueError.message} (راجع الكونسول للمزيد من التفاصيل)`);
             }
         }
       }
