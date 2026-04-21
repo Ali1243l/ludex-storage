@@ -36,28 +36,42 @@ export default function Transactions() {
   };
 
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchTransactions = async () => {
+      if (!isMounted) return;
       setIsLoading(true);
-      const { data, error } = await supabase.from('transactions').select('*');
-      if (data) setTransactions(data as Transaction[]);
-      if (error) console.error("Error fetching transactions:", error);
-      setIsLoading(false);
+      try {
+        const { data, error } = await supabase.from('transactions').select('*').order('date', { ascending: false });
+        if (!isMounted) return;
+        if (data) setTransactions(data as Transaction[]);
+        if (error) console.error("Error fetching transactions:", error);
+      } catch (e) {
+        console.error("Fetch transactions error:", e);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
     };
 
     fetchTransactions();
+
+    let timeoutId: NodeJS.Timeout;
 
     const channel = supabase
       .channel('schema-db-changes-transactions')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'transactions' },
-        (payload) => {
-          fetchTransactions();
+        () => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => fetchTransactions(), 500);
         }
       )
       .subscribe();
 
     return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
       supabase.removeChannel(channel);
     };
   }, []);

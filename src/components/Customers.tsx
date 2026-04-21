@@ -26,34 +26,57 @@ export default function Customers() {
   });
 
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchData = async () => {
+      if (!isMounted) return;
       setIsLoading(true);
-      const [{ data: cData }, { data: sData }] = await Promise.all([
-        supabase.from('customers').select('*'),
-        supabase.from('sales').select('customerUsername, customerCode, date, productName, price, id')
-      ]);
-      if (cData) setCustomers(cData as Customer[]);
-      if (sData) setSalesRecord(sData);
-      setIsLoading(false);
+      
+      try {
+        const [{ data: cData }, { data: sData }] = await Promise.all([
+          supabase.from('customers').select('*').order('id', { ascending: false }),
+          supabase.from('sales').select('customerUsername, customerCode, date, productName, price, id').order('date', { ascending: false })
+        ]);
+        
+        if (!isMounted) return;
+        
+        if (cData) setCustomers(cData as Customer[]);
+        if (sData) setSalesRecord(sData);
+      } catch (err) {
+        console.error("Error fetching data:", err);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
     };
 
     fetchData();
 
+    // Simplified real-time listener: debounce updates to prevent rapid re-fetching
+    let timeoutId: NodeJS.Timeout;
+    
     const channel = supabase
-      .channel('schema-db-changes')
+      .channel('schema-db-changes-customers')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'customers' },
-        () => fetchData()
+        () => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => fetchData(), 500);
+        }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'sales' },
-        () => fetchData()
+        () => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => fetchData(), 500);
+        }
       )
       .subscribe();
 
     return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
       supabase.removeChannel(channel);
     };
   }, []);

@@ -78,28 +78,41 @@ export default function App() {
   };
 
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchSubscriptions = async () => {
+      if (!isMounted) return;
       setIsLoading(true);
-      const { data, error } = await supabase.from('subscriptions').select('*');
-      if (data) setSubscriptions(data as Subscription[]);
-      if (error) console.error("Error fetching subscriptions:", error);
-      setIsLoading(false);
+      try {
+        const { data, error } = await supabase.from('subscriptions').select('*').order('id', { ascending: false });
+        if (!isMounted) return;
+        if (data) setSubscriptions(data as Subscription[]);
+        if (error) console.error("Error fetching subscriptions:", error);
+      } catch(e) {
+        console.error("Critical fetch error:", e);
+      }
+      if (isMounted) setIsLoading(false);
     };
 
     fetchSubscriptions();
 
+    let timeoutId: NodeJS.Timeout;
+    
     const channel = supabase
       .channel('schema-db-changes-subscriptions')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'subscriptions' },
-        (payload) => {
-          fetchSubscriptions();
+        () => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => fetchSubscriptions(), 500);
         }
       )
       .subscribe();
 
     return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
       supabase.removeChannel(channel);
     };
   }, []);

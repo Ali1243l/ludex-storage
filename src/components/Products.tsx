@@ -100,28 +100,42 @@ export default function Products() {
   });
 
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchProducts = async () => {
+      if (!isMounted) return;
       setIsLoading(true);
-      const { data, error } = await supabase.from('products').select('*');
-      if (data) setProducts(data as Product[]);
-      if (error) console.error("Error fetching products:", error);
-      setIsLoading(false);
+      try {
+        const { data, error } = await supabase.from('products').select('*').order('id', { ascending: false });
+        if (!isMounted) return;
+        if (data) setProducts(data as Product[]);
+        if (error) console.error("Error fetching products:", error);
+      } catch (e) {
+        console.error("Fetch products error:", e);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
     };
 
     fetchProducts();
+    
+    let timeoutId: NodeJS.Timeout;
 
     const channel = supabase
       .channel('schema-db-changes-products')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'products' },
-        (payload) => {
-          fetchProducts();
+        () => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => fetchProducts(), 500);
         }
       )
       .subscribe();
 
     return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
       supabase.removeChannel(channel);
     };
   }, []);

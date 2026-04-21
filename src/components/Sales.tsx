@@ -55,32 +55,45 @@ export default function Sales() {
   });
 
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchSales = async () => {
+      if (!isMounted) return;
       setIsLoading(true);
-      const { data, error } = await supabase.from('sales').select('*');
-      if (data) setSales(data as SaleRecord[]);
-      if (error) console.error("Error fetching sales:", error);
-      
-      const { data: cData } = await supabase.from('customers').select('name, username, customer_code');
-      if (cData) setCustomersList(cData as {name: string, username: string, customer_code: string}[]);
-
-      setIsLoading(false);
+      try {
+        const [{ data: sData }, { data: cData }] = await Promise.all([
+          supabase.from('sales').select('*').order('date', { ascending: false }),
+          supabase.from('customers').select('name, username, customer_code')
+        ]);
+        if (!isMounted) return;
+        if (sData) setSales(sData as SaleRecord[]);
+        if (cData) setCustomersList(cData as {name: string, username: string, customer_code: string}[]);
+      } catch (e) {
+        console.error("Fetch sales error:", e);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
     };
 
     fetchSales();
+
+    let timeoutId: NodeJS.Timeout;
 
     const channel = supabase
       .channel('schema-db-changes-sales')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'sales' },
-        (payload) => {
-          fetchSales();
+        () => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => fetchSales(), 500);
         }
       )
       .subscribe();
 
     return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
       supabase.removeChannel(channel);
     };
   }, []);
