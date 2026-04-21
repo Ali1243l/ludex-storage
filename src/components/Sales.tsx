@@ -157,8 +157,9 @@ export default function Sales() {
         if (existingCustomer) {
           // B. Update existing customer's purchases cleanly
           
-          // FORCE the use of the customer's existing code (Ignore what might have been generated or typed)
-          if (existingCustomer.customer_code) {
+          // CRITICAL FIX: Respect the UI completely. If the UI auto-filled the code, Keep it.
+          // Fallback to customer's DB code ONLY if the UI passed a completely blank code.
+          if (!finalCustomerCode && existingCustomer.customer_code) {
              finalCustomerCode = existingCustomer.customer_code;
           }
 
@@ -184,8 +185,14 @@ export default function Sales() {
           
           // 4. Update the exact column exclusively
           try {
+             // We also make sure the DB is synced with whatever code the user submitted in the UI format if it was different/fixed
+             const syncPayload: any = { purchases: updatedPurchases };
+             if (finalCustomerCode && finalCustomerCode !== existingCustomer.customer_code) {
+                 syncPayload.customer_code = finalCustomerCode;
+             }
+
              const { error: syncError } = await supabase.from('customers')
-               .update({ purchases: updatedPurchases })
+               .update(syncPayload)
                .eq('id', existingCustomer.id);
              
              if (syncError) console.error("Auto-sync error:", syncError);
@@ -195,9 +202,10 @@ export default function Sales() {
             
         } else {
           // C. Insert new customer
-          // ONLY generate a new code here since this is a definitively new customer
-          const randomCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.floor(Math.random() * 1000);
-          finalCustomerCode = randomCode; 
+          // ONLY generate a new code here if the UI didn't already supply one!
+          if (!finalCustomerCode) {
+             finalCustomerCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.floor(Math.random() * 1000);
+          }
           
           // Use the random code logic also for the purchase JSON
           const shortRandomId = Math.random().toString(36).substring(2, 9);
