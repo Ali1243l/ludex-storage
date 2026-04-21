@@ -14,11 +14,12 @@ export default function Transactions() {
 
   const [activeTab, setActiveTab] = useState<TransactionType>('expense');
   const [searchQuery, setSearchQuery] = useState('');
+  const [timeFilter, setTimeFilter] = useState<'today' | '7days' | 'month' | 'all'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<Omit<Transaction, 'id' | 'type'>>({
+  const [formData, setFormData] = useState<Omit<Transaction, 'id' | 'type' | 'created_at'>>({
     person: '',
     username: '',
     description: '',
@@ -42,7 +43,23 @@ export default function Transactions() {
       if (!isMounted) return;
       setIsLoading(true);
       try {
-        const { data, error } = await supabase.from('transactions').select('*').order('date', { ascending: false });
+        let query = supabase.from('transactions').select('*').order('created_at', { ascending: false });
+        
+        if (timeFilter !== 'all') {
+          const now = new Date();
+          let startDate = new Date();
+          if (timeFilter === 'today') {
+            startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          } else if (timeFilter === '7days') {
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          } else if (timeFilter === 'month') {
+            startDate.setDate(1);
+            startDate.setHours(0, 0, 0, 0);
+          }
+          query = query.gte('created_at', startDate.toISOString());
+        }
+
+        const { data, error } = await query;
         if (!isMounted) return;
         if (data) setTransactions(data as Transaction[]);
         if (error) console.error("Error fetching transactions:", error);
@@ -74,7 +91,7 @@ export default function Transactions() {
       clearTimeout(timeoutId);
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [timeFilter]);
 
   const handleOpenModal = (tx?: Transaction) => {
     if (tx) {
@@ -207,6 +224,16 @@ export default function Transactions() {
         ring: 'focus:ring-green-500 dark:focus:ring-green-400'
       };
 
+  const formatTime = (timestamp?: string) => {
+    if (!timestamp) return '';
+    try {
+      const d = new Date(timestamp);
+      return d.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit', hour12: true });
+    } catch {
+      return '';
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Tabs */}
@@ -264,22 +291,50 @@ export default function Transactions() {
       {/* Actions and List */}
       <div className="bg-white dark:bg-slate-800 shadow-sm rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden transition-colors duration-200">
         <div className="p-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/50 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="relative w-full sm:max-w-md">
-            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400 dark:text-slate-500" />
+          <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-3 flex-1">
+            <div className="relative w-full sm:max-w-xs">
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400 dark:text-slate-500" />
+              </div>
+              <input
+                type="text"
+                className="block w-full pl-3 pr-10 py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder={`ابحث في ${tabLabel}...`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
-            <input
-              type="text"
-              className="block w-full pl-3 pr-10 py-2 border border-gray-300 dark:border-slate-600 rounded-md leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder={`ابحث في ${tabLabel}...`}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+            <div className="flex bg-gray-100 dark:bg-slate-700 p-1 rounded-lg w-full sm:w-auto overflow-x-auto custom-scrollbar">
+              <button
+                onClick={() => setTimeFilter('all')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${timeFilter === 'all' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}
+              >
+                الكل
+              </button>
+              <button
+                onClick={() => setTimeFilter('month')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${timeFilter === 'month' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}
+              >
+                هذا الشهر
+              </button>
+              <button
+                onClick={() => setTimeFilter('7days')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${timeFilter === '7days' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}
+              >
+                آخر 7 أيام
+              </button>
+              <button
+                onClick={() => setTimeFilter('today')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${timeFilter === 'today' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}
+              >
+                اليوم
+              </button>
+            </div>
           </div>
           {role === 'admin' && (
             <button
               onClick={() => handleOpenModal()}
-              className={`w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white ${colorClasses.bg} ${colorClasses.hover} shadow-sm transition-colors`}
+              className={`w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white ${colorClasses.bg} ${colorClasses.hover} shadow-sm transition-colors`}
             >
               <Plus className="w-5 h-5 ml-2 -mr-1" />
               إضافة {isExpense ? 'مصروف' : 'وارد'} جديد
@@ -363,9 +418,16 @@ export default function Transactions() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-slate-400">
-                      <div className="flex items-center">
-                        <Calendar className="w-4 h-4 ml-1.5 text-gray-400 dark:text-slate-500" />
-                        {tx.date}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center">
+                          <Calendar className="w-4 h-4 ml-1.5 text-gray-400 dark:text-slate-500" />
+                          {tx.date}
+                        </div>
+                        {tx.created_at && (
+                          <div className="text-xs text-slate-400 dark:text-slate-500 mr-5">
+                            {formatTime(tx.created_at)}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -440,7 +502,12 @@ export default function Transactions() {
                 <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50 text-sm">
                   <div className="flex items-center text-xs text-slate-500 dark:text-slate-400 mb-2 pb-2 border-b border-slate-200 dark:border-slate-700">
                     <Calendar className="w-3.5 h-3.5 ml-1.5 shrink-0" />
-                    {tx.date}
+                    <span>{tx.date}</span>
+                    {tx.created_at && (
+                      <span className="mr-2 px-2 border-r border-slate-300 dark:border-slate-600">
+                        {formatTime(tx.created_at)}
+                      </span>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <span className="text-xs text-slate-500 dark:text-slate-400 block">المنتج / الوصف</span>

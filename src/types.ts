@@ -20,6 +20,7 @@ export interface Transaction {
   amount: number;
   date: string;
   notes?: string;
+  created_at?: string;
 }
 
 export interface Purchase {
@@ -69,6 +70,7 @@ export interface SaleRecord {
   price: number;
   notes: string;
   productLink?: string;
+  created_at?: string;
 }
 
 export interface Supplier {
