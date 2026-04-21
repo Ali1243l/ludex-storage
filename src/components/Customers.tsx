@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Search, Users, User, AtSign, Calendar, FileText, CheckCircle, X, ShoppingBag } from 'lucide-react';
-import { Customer, Purchase } from '../types';
+import { Customer } from '../types';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../AuthContext';
@@ -10,6 +10,7 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 export default function Customers() {
   const { role } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [salesRecord, setSalesRecord] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -17,45 +18,41 @@ export default function Customers() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<Omit<Customer, 'id' | 'customer_number'>>({
+  const [formData, setFormData] = useState<Omit<Customer, 'id' | 'customer_number' | 'purchases'>>({
     name: '',
     username: '',
     customer_code: '',
-    purchases: [],
     notes: '',
   });
 
   useEffect(() => {
-    // 1. دالة تجيب البيانات أول ما يفتح البرنامج
-    const fetchCustomers = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
-      const { data, error } = await supabase.from('customers').select('*');
-      if (data) setCustomers(data as Customer[]);
-      if (error) console.error("Error fetching:", error);
+      const [{ data: cData }, { data: sData }] = await Promise.all([
+        supabase.from('customers').select('*'),
+        supabase.from('sales').select('customerUsername, customerCode, date')
+      ]);
+      if (cData) setCustomers(cData as Customer[]);
+      if (sData) setSalesRecord(sData);
       setIsLoading(false);
     };
 
-    fetchCustomers();
+    fetchData();
 
-    // 2. نشغل ميزة التحديث التلقائي (Real-time)
     const channel = supabase
       .channel('schema-db-changes')
       .on(
         'postgres_changes',
-        {
-          event: '*', // يشمل الإضافة، التعديل، والحذف
-          schema: 'public',
-          table: 'customers' // خلي اسم الجدول مالتك هنا
-        },
-        (payload) => {
-          console.log('صار تغيير بالبيانات!', payload);
-          // نحدث الواجهة فوراً من يصير تغيير
-          fetchCustomers();
-        }
+        { event: '*', schema: 'public', table: 'customers' },
+        () => fetchData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sales' },
+        () => fetchData()
       )
       .subscribe();
 
-    // تنظيف الاشتراك من المستخدم يطلع من الصفحة حتى ما يصير ثقل بالبرنامج
     return () => {
       supabase.removeChannel(channel);
     };
@@ -68,7 +65,6 @@ export default function Customers() {
         name: customer.name,
         username: customer.username,
         customer_code: customer.customer_code || '',
-        purchases: customer.purchases ? [...customer.purchases] : [],
         notes: customer.notes || '',
       });
     } else {
@@ -77,7 +73,6 @@ export default function Customers() {
         name: '',
         username: '',
         customer_code: '',
-        purchases: [],
         notes: '',
       });
     }
@@ -92,7 +87,7 @@ export default function Customers() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const sanitizedUsername = formData.username ? formData.username.replace('@', '').trim().toLowerCase() : null;
+    const sanitizedUsername = formData.username ? formData.username.replace(/@/g, '').trim().toLowerCase() : null;
     const sanitizedName = formData.name ? formData.name.trim() : '';
 
     if (editingCustomer) {
@@ -101,8 +96,7 @@ export default function Customers() {
         .update({ 
            ...formData, 
            username: sanitizedUsername, 
-           name: sanitizedName,
-           purchase_count: formData.purchases.length
+           name: sanitizedName
         })
         .eq('id', editingCustomer.id);
       
@@ -111,7 +105,6 @@ export default function Customers() {
         alert(`حدث خطأ أثناء التعديل: ${error.message}`);
       }
     } else {
-      // Get max customer_number to generate the next one
       const { data: maxData } = await supabase
         .from('customers')
         .select('customer_number')
@@ -132,8 +125,6 @@ export default function Customers() {
       const payload = {
         name: sanitizedName,
         username: sanitizedUsername,
-        purchases: formData.purchases,
-        purchase_count: formData.purchases.length,
         notes: formData.notes,
         customer_code: finalCustomerCode,
         customer_number: nextNumber
@@ -156,7 +147,6 @@ export default function Customers() {
     
     const skipWarning = localStorage.getItem('skipDeleteWarning') === 'true';
     if (skipWarning) {
-      // Delete directly
       supabase.from('customers').delete().eq('id', id).then(({ error }) => {
         if (error) {
           console.error("Error deleting:", error);
@@ -185,53 +175,63 @@ export default function Customers() {
     }
   };
 
-  const handleAddPurchase = () => {
-    setFormData(prev => ({
-      ...prev,
-      purchases: [
-        ...prev.purchases,
-        { id: generateId(), date: new Date().toISOString().split('T')[0], details: '' }
-      ]
-    }));
-  };
+  // Attach relational sales data to customers
+  const customersWithDerivedSales = useMemo(() => {
+     return customers.map(customer => {
+        const cUsername = (customer.username || '').replace(/@/g, '').trim().toLowerCase();
+        const cCode = (customer.customer_code || '').trim().toLowerCase();
+        
+        // Find all their sales
+        const theirSales = salesRecord.filter(sale => {
+           let match = false;
+           if (cUsername && sale.customerUsername && sale.customerUsername.replace(/@/g, '').trim().toLowerCase() === cUsername) {
+             match = true;
+           }
+           if (cCode && sale.customerCode && sale.customerCode.trim().toLowerCase() === cCode) {
+             match = true;
+           }
+           return match;
+        });
 
-  const handleUpdatePurchase = (id: string, field: keyof Purchase, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      purchases: prev.purchases.map(p => p.id === id ? { ...p, [field]: value } : p)
-    }));
-  };
+        // Get count and latest date
+        const purchaseCount = theirSales.length;
+        let lastPurchaseDate = null;
+        if (purchaseCount > 0) {
+           const sortedSales = [...theirSales].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+           lastPurchaseDate = sortedSales[0].date;
+        }
 
-  const handleRemovePurchase = (id: string) => {
-    setFormData(prev => ({
-      ...prev,
-      purchases: prev.purchases.filter(p => p.id !== id)
-    }));
-  };
+        return {
+           ...customer,
+           derivedPurchaseCount: purchaseCount,
+           derivedLastPurchase: lastPurchaseDate,
+        };
+     });
+  }, [customers, salesRecord]);
+
 
   const filteredCustomers = useMemo(() => {
-    return customers
-      .filter(c =>
+    return customersWithDerivedSales
+      .filter((c: any) =>
         (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (c.username || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (c.notes || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (c.customer_number?.toString() || '').includes(searchQuery)
       )
-      .sort((a, b) => {
-        // Sort by latest purchase date
-        const aPurchases = a.purchases || [];
-        const bPurchases = b.purchases || [];
-        const aLast = aPurchases.length > 0 ? Math.max(...aPurchases.map(p => new Date(p.date).getTime())) : 0;
-        const bLast = bPurchases.length > 0 ? Math.max(...bPurchases.map(p => new Date(p.date).getTime())) : 0;
-        return bLast - aLast;
+      .sort((a: any, b: any) => {
+        const aDate = a.derivedLastPurchase ? new Date(a.derivedLastPurchase).getTime() : 0;
+        const bDate = b.derivedLastPurchase ? new Date(b.derivedLastPurchase).getTime() : 0;
+        return bDate - aDate;
       });
-  }, [customers, searchQuery]);
+  }, [customersWithDerivedSales, searchQuery]);
 
   const stats = useMemo(() => {
     const totalCustomers = customers.length;
-    const totalPurchases = customers.reduce((sum, c) => sum + (c.purchases?.length || 0), 0);
+    let totalPurchases = 0;
+    // We can just sum up the derived counts
+    customersWithDerivedSales.forEach((c: any) => { totalPurchases += c.derivedPurchaseCount; });
     return { totalCustomers, totalPurchases };
-  }, [customers]);
+  }, [customersWithDerivedSales, customers.length]);
 
   return (
     <div className="space-y-6">
@@ -254,7 +254,7 @@ export default function Customers() {
               <ShoppingBag className="w-8 h-8" />
             </div>
             <div>
-              <dt className="text-sm font-medium text-gray-500 dark:text-slate-400 truncate">إجمالي عمليات الشراء</dt>
+              <dt className="text-sm font-medium text-gray-500 dark:text-slate-400 truncate">إجمالي المشتريات المرتبطة</dt>
               <dd className="mt-1 text-3xl font-semibold text-purple-600 dark:text-purple-400">{stats.totalPurchases}</dd>
             </div>
           </div>
@@ -296,8 +296,8 @@ export default function Customers() {
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">اسم الزبون</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">يوزر الحساب</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">كود الزبون</th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">عدد المرات</th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">آخر شراء</th>
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">عدد المرات ذكياً</th>
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">تاريخ آخر مبيعة</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">الملاحظات</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">إجراءات</th>
               </tr>
@@ -309,7 +309,7 @@ export default function Customers() {
                     <div className="flex flex-col items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mb-4"></div>
                       <p className="text-lg font-medium text-slate-900 dark:text-white">جاري تحميل البيانات...</p>
-                      <p className="text-sm mt-1">يتم الآن جلب معلومات الزبائن من السحابة.</p>
+                      <p className="text-sm mt-1">يتم الفحص والربط الذكي مع المبيعات...</p>
                     </div>
                   </td>
                 </tr>
@@ -324,12 +324,7 @@ export default function Customers() {
                   </td>
                 </tr>
               ) : (
-                filteredCustomers.map((customer) => {
-                  const purchases = customer.purchases || [];
-                  const lastPurchase = purchases.length > 0 
-                    ? [...purchases].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
-                    : null;
-
+                filteredCustomers.map((customer: any) => {
                   return (
                     <tr key={customer.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -357,14 +352,14 @@ export default function Customers() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-500/10 text-blue-800 dark:text-blue-400">
-                          {purchases.length} مرات
+                          {customer.derivedPurchaseCount} مرات
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-slate-400">
-                        {lastPurchase ? (
+                        {customer.derivedLastPurchase ? (
                           <div className="flex items-center">
                             <Calendar className="w-4 h-4 ml-1.5 text-gray-400 dark:text-slate-500" />
-                            {lastPurchase.date}
+                            {customer.derivedLastPurchase}
                           </div>
                         ) : (
                           <span className="text-gray-400 dark:text-slate-600">-</span>
@@ -406,12 +401,12 @@ export default function Customers() {
         {/* Mobile Card View */}
         <div className="md:hidden divide-y divide-slate-200 dark:divide-slate-700">
           {isLoading ? (
-            <div className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
-              <div className="flex flex-col items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mb-4"></div>
-                <p className="text-base font-medium text-slate-900 dark:text-white">جاري تحميل البيانات...</p>
-              </div>
-            </div>
+             <div className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
+               <div className="flex flex-col items-center justify-center">
+                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mb-4"></div>
+                 <p className="text-base font-medium text-slate-900 dark:text-white">جاري الفحص الذكي...</p>
+               </div>
+             </div>
           ) : filteredCustomers.length === 0 ? (
             <div className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
               <div className="flex flex-col items-center justify-center">
@@ -420,12 +415,7 @@ export default function Customers() {
               </div>
             </div>
           ) : (
-            filteredCustomers.map((customer) => {
-              const purchases = customer.purchases || [];
-              const lastPurchase = purchases.length > 0 
-                ? [...purchases].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
-                : null;
-
+            filteredCustomers.map((customer: any) => {
               return (
                 <div key={customer.id} className="p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                   <div className="flex justify-between items-start mb-3">
@@ -471,15 +461,15 @@ export default function Customers() {
                   
                   <div className="grid grid-cols-2 gap-2 mt-3 text-xs bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-500 dark:text-slate-400">عدد المرات</span>
+                      <span className="text-slate-500 dark:text-slate-400">المرات</span>
                       <span className="font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded">
-                        {purchases.length}
+                        {customer.derivedPurchaseCount}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500 dark:text-slate-400">آخر شراء</span>
                       <span className="font-medium text-slate-700 dark:text-slate-300">
-                        {lastPurchase ? lastPurchase.date : '-'}
+                        {customer.derivedLastPurchase || '-'}
                       </span>
                     </div>
                   </div>
@@ -502,7 +492,7 @@ export default function Customers() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" aria-labelledby="modal-title" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-gray-900/40 dark:bg-slate-900/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={handleCloseModal}></div>
           
-          <div className="relative bg-white dark:bg-slate-800 rounded-2xl text-right shadow-2xl w-full max-w-2xl border border-gray-100 dark:border-slate-700 flex flex-col max-h-[95vh] animate-in fade-in zoom-in-95 duration-200 transition-colors">
+          <div className="relative bg-white dark:bg-slate-800 rounded-2xl text-right shadow-2xl w-full max-w-lg border border-gray-100 dark:border-slate-700 flex flex-col animate-in fade-in zoom-in-95 duration-200 transition-colors">
             
             {/* Header */}
             <div className="bg-gray-50/80 dark:bg-slate-800/80 px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center shrink-0 rounded-t-2xl">
@@ -515,8 +505,8 @@ export default function Customers() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
-              <div className="overflow-y-auto px-6 py-5 space-y-6">
+            <form onSubmit={handleSubmit} className="flex flex-col">
+              <div className="px-6 py-5 space-y-6">
                 
                 {/* Group 1: Basic Info */}
                 <div>
@@ -525,7 +515,12 @@ export default function Customers() {
                     المعلومات الأساسية
                   </h4>
                   <div className="bg-gray-50/50 dark:bg-slate-700/30 p-4 rounded-xl border border-gray-100 dark:border-slate-600 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
+                    <div className="sm:col-span-2">
+                       <div className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 p-2 text-center rounded-lg mb-2">
+                          انتباه: المشتريات التابعة لهذا الزبون تتم مزامنتها وربطها تلقائياً بالكامل من صفحة (المبيعات).
+                       </div>
+                    </div>
+                    <div className="sm:col-span-2">
                       <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">اسم الزبون <span className="text-red-500">*</span></label>
                       <input
                         type="text"
@@ -554,8 +549,8 @@ export default function Customers() {
                         />
                       </div>
                     </div>
-                    <div className="sm:col-span-2">
-                      <label htmlFor="customer_code" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">كود الزبون (اختياري)</label>
+                    <div>
+                      <label htmlFor="customer_code" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">كود الزبون</label>
                       <input
                         type="text"
                         id="customer_code"
@@ -563,79 +558,13 @@ export default function Customers() {
                         className="block w-full border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-left"
                         value={formData.customer_code}
                         onChange={(e) => setFormData({ ...formData, customer_code: e.target.value })}
-                        placeholder="كود خاص للبحث عنه بسرعة..."
+                        placeholder="يولد تلقائيا..."
                       />
-                      <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">يمكنك استخدام هذا الكود في سجل المبيعات لربط الشراء بهذا الزبون مباشرة بدلاً من دقة الاسم او اليوزر.</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Group 2: Purchases */}
-                <div>
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                      <ShoppingBag className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                      سجل المشتريات
-                    </h4>
-                    <button
-                      type="button"
-                      onClick={handleAddPurchase}
-                      className="inline-flex items-center text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 px-2.5 py-1.5 rounded-md transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5 ml-1" />
-                      إضافة شراء
-                    </button>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    {formData.purchases.length === 0 ? (
-                      <div className="text-center py-6 bg-gray-50/50 dark:bg-slate-700/30 rounded-xl border border-gray-100 dark:border-slate-600 border-dashed">
-                        <p className="text-sm text-gray-500 dark:text-slate-400">لم يتم إضافة أي مشتريات بعد.</p>
-                      </div>
-                    ) : (
-                      formData.purchases.map((purchase, index) => (
-                        <div key={purchase.id} className="flex items-start gap-3 bg-white dark:bg-slate-800 p-3 rounded-xl border border-gray-200 dark:border-slate-600 shadow-sm relative group">
-                          <div className="absolute -right-2 -top-2 bg-blue-100 dark:bg-blue-500/20 text-blue-800 dark:text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-500/30">
-                            {index + 1}
-                          </div>
-                          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div className="sm:col-span-1">
-                              <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1">تاريخ الشراء</label>
-                              <input
-                                type="date"
-                                required
-                                className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-1.5 px-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                                value={purchase.date}
-                                onChange={(e) => handleUpdatePurchase(purchase.id, 'date', e.target.value)}
-                              />
-                            </div>
-                            <div className="sm:col-span-2">
-                              <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1">التفاصيل (المنتج)</label>
-                              <input
-                                type="text"
-                                required
-                                className="block w-full border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-1.5 px-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                                value={purchase.details}
-                                onChange={(e) => handleUpdatePurchase(purchase.id, 'details', e.target.value)}
-                                placeholder="مثال: اشتراك نتفليكس شهر"
-                              />
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRemovePurchase(purchase.id)}
-                            className="mt-5 text-gray-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-500/10"
-                            title="حذف هذا الشراء"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Group 3: Notes */}
+                {/* Group 2: Notes */}
                 <div>
                   <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />

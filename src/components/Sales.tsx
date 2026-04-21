@@ -155,81 +155,36 @@ export default function Sales() {
         }
 
         if (existingCustomer) {
-          // B. Update existing customer's purchases cleanly
-          
-          // CRITICAL FIX: Respect the UI completely. If the UI auto-filled the code, Keep it.
-          // Fallback to customer's DB code ONLY if the UI passed a completely blank code.
+          // CONDITION 1: Existing Customer
+          // No JSONB updates needed anymore! We just use their existing code
           if (!finalCustomerCode && existingCustomer.customer_code) {
              finalCustomerCode = existingCustomer.customer_code;
           }
-
-          // 1. Extract the old purchases exactly
-          let currentPurchases = existingCustomer.purchases || [];
-          if (typeof currentPurchases === 'string') {
-            try { currentPurchases = JSON.parse(currentPurchases); } catch(e) { /* ignore */ }
-          }
-          if (!Array.isArray(currentPurchases)) {
-             currentPurchases = [];
-          }
-
-          // 2. Generate the exact object structure manually, precisely matching: {"id": "short_str", "date": "...", "details": "..."}
-          const shortRandomId = Math.random().toString(36).substring(2, 9);
-          const newPurchase = { 
-            id: shortRandomId, 
-            date: formData.date, 
-            details: formData.productName 
-          };
-
-          // 3. Append to array via destructing
-          const updatedPurchases = [...currentPurchases, newPurchase];
-          
-          // 4. Update the exact column exclusively
-          try {
-             // We also make sure the DB is synced with whatever code the user submitted in the UI format if it was different/fixed
-             const syncPayload: any = { purchases: updatedPurchases };
-             if (finalCustomerCode && finalCustomerCode !== existingCustomer.customer_code) {
-                 syncPayload.customer_code = finalCustomerCode;
-             }
-
-             const { error: syncError } = await supabase.from('customers')
-               .update(syncPayload)
-               .eq('id', existingCustomer.id);
-             
-             if (syncError) console.error("Auto-sync error:", syncError);
-          } catch(e) {
-             console.error("Auto-sync catch:", e);
-          }
             
         } else {
-          // C. Insert new customer
-          // ONLY generate a new code here if the UI didn't already supply one!
+          // CONDITION 2: New Customer
+          // Generate a new code ONLY if the UI didn't already supply one
           if (!finalCustomerCode) {
              finalCustomerCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.floor(Math.random() * 1000);
           }
-          
-          // Use the random code logic also for the purchase JSON
-          const shortRandomId = Math.random().toString(36).substring(2, 9);
-          const newPurchase = { 
-            id: shortRandomId, 
-            date: formData.date, 
-            details: formData.productName 
-          };
 
           const { data: maxData } = await supabase.from('customers')
             .select('customer_number')
             .not('customer_number', 'is', null)
             .order('customer_number', { ascending: false })
             .limit(1);
+            
           let nextNumber = 1;
-          if (maxData && maxData.length > 0 && maxData[0].customer_number) nextNumber = maxData[0].customer_number + 1;
+          if (maxData && maxData.length > 0 && maxData[0].customer_number) {
+            nextNumber = maxData[0].customer_number + 1;
+          }
 
+          // Insert new customer purely with core data (No dirty JSON arrays)
           await supabase.from('customers').insert([{
             name: finalCustomerName || 'زبون غير معروف',
             username: finalCustomerUsername || null,
             customer_code: finalCustomerCode,
-            customer_number: nextNumber,
-            purchases: [newPurchase],
-            purchase_count: 1
+            customer_number: nextNumber
           }]);
         }
       }
