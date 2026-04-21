@@ -30,7 +30,7 @@ export default function Customers() {
       setIsLoading(true);
       const [{ data: cData }, { data: sData }] = await Promise.all([
         supabase.from('customers').select('*'),
-        supabase.from('sales').select('customerUsername, customerCode, date')
+        supabase.from('sales').select('customerUsername, customerCode, date, productName, price, id')
       ]);
       if (cData) setCustomers(cData as Customer[]);
       if (sData) setSalesRecord(sData);
@@ -177,34 +177,66 @@ export default function Customers() {
 
   // Attach relational sales data to customers
   const customersWithDerivedSales = useMemo(() => {
+     // Create hash maps for faster lookup O(1) instead of O(N) filtering
+     const salesByUsername = new Map();
+     const salesByCode = new Map();
+     
+     salesRecord.forEach(sale => {
+       if (sale.customerUsername) {
+         const uname = sale.customerUsername.replace(/@/g, '').trim().toLowerCase();
+         if (!salesByUsername.has(uname)) salesByUsername.set(uname, []);
+         salesByUsername.get(uname).push(sale);
+       }
+       if (sale.customerCode) {
+         const code = sale.customerCode.trim().toLowerCase();
+         if (!salesByCode.has(code)) salesByCode.set(code, []);
+         salesByCode.get(code).push(sale);
+       }
+     });
+
      return customers.map(customer => {
         const cUsername = (customer.username || '').replace(/@/g, '').trim().toLowerCase();
         const cCode = (customer.customer_code || '').trim().toLowerCase();
         
-        // Find all their sales
-        const theirSales = salesRecord.filter(sale => {
-           let match = false;
-           if (cUsername && sale.customerUsername && sale.customerUsername.replace(/@/g, '').trim().toLowerCase() === cUsername) {
-             match = true;
-           }
-           if (cCode && sale.customerCode && sale.customerCode.trim().toLowerCase() === cCode) {
-             match = true;
-           }
-           return match;
-        });
+        let theirSales: any[] = [];
+        const seenSales = new Set();
+        
+        // Add sales matched by username
+        if (cUsername && salesByUsername.has(cUsername)) {
+          salesByUsername.get(cUsername).forEach((sale: any) => {
+             if (!seenSales.has(sale.id)) {
+                seenSales.add(sale.id);
+                theirSales.push(sale);
+             }
+          });
+        }
+        
+        // Add sales matched by code
+        if (cCode && salesByCode.has(cCode)) {
+          salesByCode.get(cCode).forEach((sale: any) => {
+             if (!seenSales.has(sale.id)) {
+                seenSales.add(sale.id);
+                theirSales.push(sale);
+             }
+          });
+        }
 
         // Get count and latest date
         const purchaseCount = theirSales.length;
         let lastPurchaseDate = null;
+        let purchaseHistory = [];
+        
         if (purchaseCount > 0) {
            const sortedSales = [...theirSales].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
            lastPurchaseDate = sortedSales[0].date;
+           purchaseHistory = sortedSales; // Store full sorted history
         }
 
         return {
            ...customer,
            derivedPurchaseCount: purchaseCount,
            derivedLastPurchase: lastPurchaseDate,
+           purchaseHistory: purchaseHistory, // Add to customer object
         };
      });
   }, [customers, salesRecord]);
@@ -586,6 +618,35 @@ export default function Customers() {
                     ></textarea>
                   </div>
                 </div>
+
+                {/* Group 3: Purchase History */}
+                {editingCustomer && (editingCustomer as any).purchaseHistory && (editingCustomer as any).purchaseHistory.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                      <ShoppingBag className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                      سجل المشتريات
+                    </h4>
+                    <div className="bg-gray-50/50 dark:bg-slate-700/30 p-4 rounded-xl border border-gray-100 dark:border-slate-600 max-h-60 overflow-y-auto">
+                       <ul className="divide-y divide-gray-200 dark:divide-slate-600/50">
+                          {(editingCustomer as any).purchaseHistory.map((purchase: any, idx: number) => (
+                             <li key={purchase.id || idx} className="py-3 flex justify-between items-center text-sm">
+                               <div className="flex flex-col">
+                                 <span className="font-medium text-gray-900 dark:text-white">
+                                    {purchase.productName || 'منتج غير معروف'}
+                                 </span>
+                                 <span className="text-xs text-gray-500 dark:text-slate-400">
+                                    {purchase.date ? new Date(purchase.date).toLocaleDateString('ar-IQ') : '-'}
+                                 </span>
+                               </div>
+                               <div className="text-emerald-600 dark:text-emerald-400 font-semibold text-right flex flex-col items-end">
+                                 {purchase.price ? purchase.price.toLocaleString('en-US') + ' د.ع' : '-'}
+                               </div>
+                             </li>
+                          ))}
+                       </ul>
+                    </div>
+                  </div>
+                )}
 
               </div>
               
