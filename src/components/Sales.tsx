@@ -212,7 +212,25 @@ export default function Sales() {
         if (error) alert(`حدث خطأ أثناء التعديل: ${error.message}`);
       } else {
         const { error } = await supabase.from('sales').insert([dataToSubmit]);
-        if (error) alert(`حدث خطأ أثناء الإضافة: ${error.message}`);
+        if (error) {
+            alert(`حدث خطأ أثناء الإضافة: ${error.message}`);
+        } else {
+            // Auto-insert into transactions table as 'income' (واردات)
+            const transactionPayload = {
+               type: 'income',
+               person: finalCustomerName || finalCustomerCode || 'زبون غير معروف',
+               username: finalCustomerUsername || '',
+               description: formData.productName || 'مبيعة غير مسماة',
+               amount: formData.price || 0,
+               date: formData.date || new Date().toISOString().split('T')[0],
+               notes: 'تم تسجيل الوارد تلقائياً من نظام المبيعات',
+            };
+            
+            const { error: txError } = await supabase.from('transactions').insert([transactionPayload]);
+            if (txError) {
+               console.error("Error creating transaction (income):", txError);
+            }
+        }
       }
       
       handleCloseModal();
