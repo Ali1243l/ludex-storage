@@ -124,21 +124,24 @@ export default function Sales() {
     if (isSubmitting) return; // Prevent double clicks and race conditions
     setIsSubmitting(true);
     
-    let finalCustomerCode = formData.customerCode ? formData.customerCode.trim() : '';
-    let finalCustomerUsername = formData.customerUsername ? formData.customerUsername.replace('@', '').trim().toLowerCase() : '';
+    // Robust input sanitization
+    let finalCustomerUsername = formData.customerUsername ? formData.customerUsername.replace(/@/g, '').trim().toLowerCase() : '';
     let finalCustomerName = formData.customerName ? formData.customerName.trim() : '';
+    let finalCustomerCode = formData.customerCode ? formData.customerCode.trim() : '';
 
     try {
       if (!editingSale) {
         let existingCustomer: any = null;
         
-        // A. Search by username first (Fast exact match single query)
+        // A. Robust Search by Username
+        // Using limit(1) handles raw duplicates gracefully without throw-crashing like single() or maybeSingle()
         if (finalCustomerUsername) {
            const { data } = await supabase.from('customers')
              .select('id, purchases, customer_code')
              .eq('username', finalCustomerUsername)
-             .maybeSingle(); 
-           existingCustomer = data;
+             .limit(1); 
+           
+           if (data && data.length > 0) existingCustomer = data[0];
         }
         
         // Fallback search by name
@@ -146,11 +149,10 @@ export default function Sales() {
            const { data } = await supabase.from('customers')
              .select('id, purchases, customer_code')
              .ilike('name', finalCustomerName)
-             .maybeSingle();
-           existingCustomer = data;
-        }
+             .limit(1);
 
-        const purchaseInfo = { id: generateId(), date: formData.date, details: formData.productName };
+           if (data && data.length > 0) existingCustomer = data[0];
+        }
 
         if (existingCustomer) {
           // B. Update existing customer's purchases cleanly
