@@ -221,6 +221,11 @@ export default function Customers() {
       .sort((a: any, b: any) => {
         const aDate = a.derivedLastPurchase ? new Date(a.derivedLastPurchase).getTime() : 0;
         const bDate = b.derivedLastPurchase ? new Date(b.derivedLastPurchase).getTime() : 0;
+        
+        if (aDate === 0 && bDate === 0) {
+           return (b.customer_number || 0) - (a.customer_number || 0);
+        }
+        
         return bDate - aDate;
       });
   }, [customersWithDerivedSales, searchQuery]);

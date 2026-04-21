@@ -180,12 +180,18 @@ export default function Sales() {
           }
 
           // Insert new customer purely with core data (No dirty JSON arrays)
-          await supabase.from('customers').insert([{
+          const newCustomerPayload = {
             name: finalCustomerName || 'زبون غير معروف',
             username: finalCustomerUsername || null,
             customer_code: finalCustomerCode,
             customer_number: nextNumber
-          }]);
+          };
+          
+          const { error: customerCreateError } = await supabase.from('customers').insert([newCustomerPayload]);
+          
+          if (customerCreateError) {
+            console.error("Error creating customer:", customerCreateError);
+          }
         }
       }
 
