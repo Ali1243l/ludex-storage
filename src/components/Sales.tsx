@@ -211,10 +211,11 @@ export default function Sales() {
         const { error } = await supabase.from('sales').update(dataToSubmit).eq('id', editingSale.id);
         if (error) alert(`حدث خطأ أثناء التعديل: ${error.message}`);
       } else {
-        const { error } = await supabase.from('sales').insert([dataToSubmit]);
+        const { data: insertedSaleData, error } = await supabase.from('sales').insert([dataToSubmit]).select();
         if (error) {
             alert(`حدث خطأ أثناء الإضافة: ${error.message}`);
         } else {
+            const insertedSale = insertedSaleData && insertedSaleData.length > 0 ? insertedSaleData[0] : null;
             // Auto-insert into transactions table as 'income' (واردات)
             const transactionPayload = {
                type: 'income',
@@ -223,7 +224,7 @@ export default function Sales() {
                description: formData.productName || 'مبيعة غير مسماة',
                amount: Number(formData.price) || 0,
                date: formData.date || new Date().toISOString().split('T')[0],
-               notes: 'تم تسجيل الوارد تلقائياً من نظام المبيعات',
+               notes: insertedSale ? `[تلقائي] رقم المبيعة المرجعي: [${insertedSale.id}]` : 'تم تسجيل الوارد تلقائياً من نظام المبيعات',
             };
             
             const { error: revenueError } = await supabase.from('transactions').insert([transactionPayload]);
@@ -246,8 +247,11 @@ export default function Sales() {
   const handleDeleteClick = (id: string) => {
     const skipWarning = localStorage.getItem('skipDeleteWarning') === 'true';
     if (skipWarning) {
-      supabase.from('sales').delete().eq('id', id).then(({ error }) => {
-        if (error) console.error("Error deleting:", error);
+      // Delete associated transaction first if it exists
+      supabase.from('transactions').delete().like('notes', `%[تلقائي] رقم المبيعة المرجعي: [${id}]%`).then(() => {
+        supabase.from('sales').delete().eq('id', id).then(({ error }) => {
+          if (error) console.error("Error deleting:", error);
+        });
       });
     } else {
       setItemToDelete(id);
@@ -256,6 +260,9 @@ export default function Sales() {
 
   const confirmDelete = async () => {
     if (itemToDelete) {
+      // Delete associated transaction first if it exists
+      await supabase.from('transactions').delete().like('notes', `%[تلقائي] رقم المبيعة المرجعي: [${itemToDelete}]%`);
+
       const { error } = await supabase
         .from('sales')
         .delete()
