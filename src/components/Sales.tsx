@@ -154,17 +154,19 @@ export default function Sales() {
 
         if (existingCustomer) {
           // B. Update existing customer's purchases cleanly
-          if (!finalCustomerCode && existingCustomer.customer_code) {
+          
+          // FORCE the use of the customer's existing code (Ignore what might have been generated or typed)
+          if (existingCustomer.customer_code) {
              finalCustomerCode = existingCustomer.customer_code;
           }
-          
+
           // 1. Extract the old purchases exactly
           let currentPurchases = existingCustomer.purchases || [];
           if (typeof currentPurchases === 'string') {
             try { currentPurchases = JSON.parse(currentPurchases); } catch(e) { /* ignore */ }
           }
           if (!Array.isArray(currentPurchases)) {
-            currentPurchases = [];
+             currentPurchases = [];
           }
 
           // 2. Generate the exact object structure manually, precisely matching: {"id": "short_str", "date": "...", "details": "..."}
@@ -191,9 +193,18 @@ export default function Sales() {
             
         } else {
           // C. Insert new customer
+          // ONLY generate a new code here since this is a definitively new customer
           const randomCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.floor(Math.random() * 1000);
           finalCustomerCode = randomCode; 
           
+          // Use the random code logic also for the purchase JSON
+          const shortRandomId = Math.random().toString(36).substring(2, 9);
+          const newPurchase = { 
+            id: shortRandomId, 
+            date: formData.date, 
+            details: formData.productName 
+          };
+
           const { data: maxData } = await supabase.from('customers')
             .select('customer_number')
             .not('customer_number', 'is', null)
@@ -207,7 +218,7 @@ export default function Sales() {
             username: finalCustomerUsername || null,
             customer_code: finalCustomerCode,
             customer_number: nextNumber,
-            purchases: [purchaseInfo],
+            purchases: [newPurchase],
             purchase_count: 1
           }]);
         }
