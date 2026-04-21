@@ -413,75 +413,76 @@ export default function Transactions() {
             </div>
           ) : (
             filteredTransactions.map((tx) => (
-              <div key={tx.id} className="p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex items-start">
-                    <div className={`flex-shrink-0 h-10 w-10 rounded-xl flex items-center justify-center font-bold text-lg ${colorClasses.bgLight} ${colorClasses.text}`}>
+              <div key={tx.id} className="p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex flex-col gap-3">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center">
+                    <div className={`flex-shrink-0 h-12 w-12 rounded-xl flex items-center justify-center font-bold text-xl ${colorClasses.bgLight} ${colorClasses.text}`}>
                       <User className="w-5 h-5" />
                     </div>
                     <div className="ml-3 mr-3 mt-1">
                       <div 
-                        className="text-sm font-bold text-slate-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        className="text-base font-bold text-slate-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                         onClick={() => handleOpenModal(tx)}
                       >
                         {tx.person}
                       </div>
-                      {tx.username && (
-                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5" dir="ltr">
-                          {tx.username}
-                        </div>
-                      )}
-                      <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1">
-                        <Calendar className="w-3 h-3" />
-                        {tx.date}
+                      <div className="text-sm font-medium text-slate-500 dark:text-slate-400" dir="ltr">
+                        {tx.username || '-'}
                       </div>
-                      <button
+                    </div>
+                  </div>
+                  <div className={`font-bold ${colorClasses.text} text-center flex flex-col justify-center`}>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 block mb-0.5 font-normal">المبلغ</span>
+                    {Number(tx.amount).toLocaleString()} د.ع
+                  </div>
+                </div>
+                
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50 text-sm">
+                  <div className="flex items-center text-xs text-slate-500 dark:text-slate-400 mb-2 pb-2 border-b border-slate-200 dark:border-slate-700">
+                    <Calendar className="w-3.5 h-3.5 ml-1.5 shrink-0" />
+                    {tx.date}
+                  </div>
+                  <div className="space-y-1.5">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 block">المنتج / الوصف</span>
+                    <p className="text-slate-900 dark:text-white whitespace-pre-wrap break-words">{tx.description}</p>
+                  </div>
+                  {tx.notes && (
+                    <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 border-dashed">
+                      <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">ملاحظات</span>
+                      <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">{tx.notes}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom Action Bar */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700">
+                   <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleCopy(`${tx.person}${tx.username ? `\n${tx.username}` : ''}`, `mob-${tx.id}`);
                         }}
-                        className="flex items-center gap-1 mt-2 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                        className="flex-1 flex justify-center items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 py-2.5 rounded-lg transition-colors ml-2"
                       >
-                        {copiedId === `mob-${tx.id}` ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                        نسخ الاسم واليوزر
-                      </button>
-                    </div>
-                  </div>
+                        {copiedId === `mob-${tx.id}` ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                        <span className={copiedId === `mob-${tx.id}` ? "text-emerald-600 dark:text-emerald-400" : ""}>نسخ الاسم واليوزر</span>
+                   </button>
+
                   {role === 'admin' && (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() => handleOpenModal(tx)}
-                        className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
+                        className="p-2.5 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-colors"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteClick(tx.id)}
-                        className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                        className="p-2.5 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/40 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   )}
-                </div>
-                
-                <div className="mt-3 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs text-slate-500 dark:text-slate-400">المبلغ</span>
-                    <span className={`font-bold ${colorClasses.text}`}>
-                      {Number(tx.amount).toLocaleString()} د.ع
-                    </span>
-                  </div>
-                  <div className="border-t border-slate-200 dark:border-slate-700 pt-2 mt-2">
-                    <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">اسم المنتج</span>
-                    <p className="text-sm font-medium text-slate-900 dark:text-white whitespace-pre-wrap break-words max-h-24 overflow-y-auto custom-scrollbar">{tx.description}</p>
-                    {tx.notes && (
-                      <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 border-dashed">
-                        <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">ملاحظات</span>
-                        <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words max-h-20 overflow-y-auto custom-scrollbar">{tx.notes}</p>
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             ))

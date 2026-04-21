@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Search, Box, Truck, DollarSign, TrendingUp, CheckCircle, X, FileText, Link as LinkIcon, ExternalLink, Loader2, Filter, Package, LayoutDashboard, ShoppingCart } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Box, Truck, DollarSign, TrendingUp, CheckCircle, X, FileText, Link as LinkIcon, ExternalLink, Loader2, Filter, Package, LayoutDashboard, ShoppingCart, Copy, Check } from 'lucide-react';
 import { Product, PriceTier } from '../types';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { supabase } from '../supabaseClient';
@@ -75,6 +75,13 @@ export default function Products() {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [multiplier, setMultiplier] = useState<number | ''>(1500);
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; multiplier: number }[]>([]);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem('supplierSettings');
@@ -543,27 +550,27 @@ export default function Products() {
               const tiers = parseTiers(product.productLink);
               const hasTiers = tiers.length > 0;
               return (
-                <div key={product.id} className="p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                  <div className="flex justify-between items-start mb-3">
+                <div key={product.id} className="p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex flex-col gap-3">
+                  <div className="flex justify-between items-start">
                     <div className="flex items-start">
-                      <div className="flex-shrink-0 h-10 w-10 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-lg">
-                        <Box className="w-5 h-5" />
+                      <div className="flex-shrink-0 h-12 w-12 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-xl">
+                        <Box className="w-6 h-6" />
                       </div>
-                      <div className="ml-3 mr-3">
+                      <div className="ml-3 mr-3 mt-1">
                         <div 
-                          className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                          className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                           onClick={() => handleOpenModal(product)}
                         >
-                          {product.name}
+                          <span className="line-clamp-2 leading-tight">{product.name}</span>
                           {role === 'admin' && (
-                            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                               {parseLinks(product.productLink).map((link, idx) => (
                                 <a 
                                   key={idx}
                                   href={link.url} 
                                   target="_blank" 
                                   rel="noopener noreferrer"
-                                  className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                                  className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-500/10 p-1.5 rounded-md transition-colors"
                                   title={`فتح الرابط ${idx + 1}${link.finalPrice ? ` - السعر النهائي: ${link.finalPrice.toLocaleString()}` : ''}${link.duration ? ` - المدة: ${link.duration}` : ''}`}
                                 >
                                   <ExternalLink className="w-3.5 h-3.5" />
@@ -572,7 +579,7 @@ export default function Products() {
                             </div>
                           )}
                         </div>
-                        <div className="flex gap-2 mt-1">
+                        <div className="flex gap-2 mt-2">
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 dark:bg-blue-500/10 text-blue-800 dark:text-blue-400">
                             {product.category || '-'}
                           </span>
@@ -582,32 +589,16 @@ export default function Products() {
                         </div>
                       </div>
                     </div>
-                    {role === 'admin' && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleOpenModal(product)}
-                          className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClick(product.id)}
-                          className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
                   </div>
                   
                   {hasTiers && (
-                    <div className="mt-3 flex flex-col gap-1.5 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
-                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">التسعيرات:</span>
+                    <div className="mt-2 flex flex-col gap-1.5 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50 text-sm">
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">التسعيرات:</span>
                       {tiers.map((tier, idx) => (
-                        <div key={idx} className="flex justify-between items-center text-xs">
-                          <span className="text-slate-700 dark:text-slate-300">{tier.name || 'بدون اسم'}</span>
+                        <div key={idx} className="flex justify-between items-center text-xs p-1.5 bg-white dark:bg-slate-800 rounded border border-gray-100 dark:border-slate-700/50 shadow-sm">
+                          <span className="text-slate-700 dark:text-slate-300 font-medium">{tier.name || 'بدون اسم'}</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-slate-400 line-through">{Number(tier.costPrice).toLocaleString()}</span>
+                            {role === 'admin' && <span className="text-slate-400 line-through text-[10px]">{Number(tier.costPrice).toLocaleString()}</span>}
                             <span className="font-bold text-emerald-600 dark:text-emerald-400">{Number(tier.sellingPrice).toLocaleString()} د.ع</span>
                           </div>
                         </div>
@@ -615,14 +606,45 @@ export default function Products() {
                     </div>
                   )}
                   
-                  <div className="mt-3 flex flex-col gap-2 text-xs">
+                  <div className="flex flex-col gap-2 text-xs">
                     {role === 'admin' && (
-                      <div className="flex items-center text-slate-500 dark:text-slate-400">
-                        <Truck className="w-3.5 h-3.5 ml-1" />
-                        {product.supplier || '-'}
+                      <div className="flex items-center text-slate-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-800/50 w-fit px-2 py-1.5 rounded-md">
+                        <Truck className="w-3.5 h-3.5 ml-1.5 text-gray-400 dark:text-slate-500 shrink-0" />
+                        <span className="truncate">{product.supplier || 'لا يوجد مورد'}</span>
                       </div>
                     )}
-                    {product.notes && <div className="text-slate-500 dark:text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto custom-scrollbar">{product.notes}</div>}
+                    {product.notes && <div className="text-slate-500 dark:text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-slate-800/50 p-2.5 rounded-md">{product.notes}</div>}
+                  </div>
+
+                  {/* Bottom Action Bar */}
+                  <div className="flex items-center justify-between pt-2 mt-1 border-t border-slate-100 dark:border-slate-700">
+                     <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopy(`المنتج: ${product.name}\n${hasTiers ? `الأسعار:\n${tiers.map(t => `- ${t.name}: ${t.sellingPrice} د.ع`).join('\n')}` : ''}`, `mob-${product.id}`);
+                        }}
+                        className="flex-1 flex justify-center items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 py-2.5 rounded-lg transition-colors ml-2"
+                      >
+                        {copiedId === `mob-${product.id}` ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                        <span className={copiedId === `mob-${product.id}` ? "text-emerald-600 dark:text-emerald-400" : ""}>نسخ تفاصيل المنتج</span>
+                     </button>
+                    
+                    {role === 'admin' && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => handleOpenModal(product)}
+                          className="p-2.5 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-colors"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(product.id)}
+                          className="p-2.5 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/40 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

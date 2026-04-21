@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Search, ShoppingCart, User, AtSign, Calendar, Tag, CheckCircle, X, FileText, DollarSign, Link as LinkIcon, ExternalLink } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, ShoppingCart, User, AtSign, Calendar, Tag, CheckCircle, X, FileText, DollarSign, Link as LinkIcon, ExternalLink, Copy, Check } from 'lucide-react';
 import { SaleRecord } from '../types';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { supabase } from '../supabaseClient';
@@ -42,6 +42,13 @@ export default function Sales() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<SaleRecord | null>(null);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const [formData, setFormData] = useState<Omit<SaleRecord, 'id' | 'productLink'> & { productLinks: ProductLinkObj[] }>({
     customerName: '',
@@ -477,78 +484,103 @@ export default function Sales() {
             </div>
           ) : (
             filteredSales.map((sale) => (
-              <div key={sale.id} className="p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                <div className="flex justify-between items-start mb-3">
+              <div key={sale.id} className="p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex flex-col gap-3">
+                <div className="flex justify-between items-start">
                   <div className="flex items-start">
-                    <div className="flex-shrink-0 h-10 w-10 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold text-lg">
-                      <User className="w-5 h-5" />
+                    <div className="flex-shrink-0 h-12 w-12 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold text-xl">
+                      <User className="w-6 h-6" />
                     </div>
-                    <div className="ml-3 mr-3">
+                    <div className="ml-3 mr-3 mt-1">
                       <div 
-                        className="text-sm font-bold text-slate-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        className="text-base font-bold text-slate-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                         onClick={() => handleOpenModal(sale)}
                       >
                         {sale.customerName}
                       </div>
                       {sale.customerUsername && (
-                        <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5" dir="ltr">
-                          <AtSign className="w-3 h-3" />
-                          {sale.customerUsername}
-                        </span>
+                        <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5" dir="ltr">
+                          <AtSign className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">{sale.customerUsername}</span>
+                        </div>
+                      )}
+                      {sale.customerCode && (
+                          <div className="text-sm font-mono text-slate-600 dark:text-slate-400 mt-1">
+                            <span className="text-slate-400 text-xs mr-1">كود:</span>
+                            {sale.customerCode}
+                          </div>
                       )}
                     </div>
                   </div>
+                </div>
+                
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50 text-sm">
+                  <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-200 dark:border-slate-700">
+                     <div className="flex items-center text-xs text-slate-500 dark:text-slate-400">
+                       <Calendar className="w-3.5 h-3.5 ml-1.5 shrink-0" />
+                       {sale.date}
+                     </div>
+                     <span className="font-bold text-emerald-600 dark:text-emerald-400">{Number(sale.price).toLocaleString()} د.ع</span>
+                  </div>
+                  
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">المنتج</span>
+                    <div className="flex items-center justify-between">
+                       <span className="font-medium text-slate-900 dark:text-white flex items-center gap-1.5">
+                         <Tag className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 shrink-0" />
+                         <span className="break-words line-clamp-2">{sale.productName}</span>
+                       </span>
+                       <div className="flex items-center gap-2 shrink-0">
+                         {parseLinks(sale.productLink).map((link, idx) => (
+                           <a 
+                             key={idx}
+                             href={link.url} 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             className="p-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-500 hover:text-blue-700 dark:text-blue-400 rounded-md transition-colors"
+                           >
+                             <ExternalLink className="w-3.5 h-3.5" />
+                           </a>
+                         ))}
+                       </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {sale.notes && (
+                  <div className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-words bg-gray-50 dark:bg-slate-800 p-2.5 rounded-lg border border-gray-100 dark:border-slate-700/50">
+                    {sale.notes}
+                  </div>
+                )}
+
+                {/* Bottom Action Bar */}
+                <div className="flex items-center justify-between pt-2 mt-1 border-t border-slate-100 dark:border-slate-700">
+                   <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopy(`الزبون: ${sale.customerName}\n${sale.customerUsername ? `يوزر: ${sale.customerUsername}\n` : ''}المنتج: ${sale.productName}\nالسعر: ${sale.price} د.ع`, `mob-${sale.id}`);
+                      }}
+                      className="flex-1 flex justify-center items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 py-2.5 rounded-lg transition-colors ml-2"
+                    >
+                      {copiedId === `mob-${sale.id}` ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                      <span className={copiedId === `mob-${sale.id}` ? "text-emerald-600 dark:text-emerald-400" : ""}>نسخ تفاصيل البيع</span>
+                   </button>
+                  
                   {role === 'admin' && (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() => handleOpenModal(sale)}
-                        className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
+                        className="p-2.5 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-colors"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteClick(sale.id)}
-                        className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                        className="p-2.5 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/40 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   )}
-                </div>
-                
-                <div className="grid grid-cols-2 gap-2 mt-3 text-xs bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg">
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400 block mb-1">السعر</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-300">{Number(sale.price).toLocaleString()} د.ع</span>
-                  </div>
-                  <div className="col-span-2 pt-2 mt-1 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                    <span className="text-slate-500 dark:text-slate-400">المنتج</span>
-                    <span className="font-medium text-slate-900 dark:text-white flex items-center gap-1.5">
-                      <Tag className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
-                      {sale.productName}
-                      <div className="flex items-center gap-1">
-                        {parseLinks(sale.productLink).map((link, idx) => (
-                          <a 
-                            key={idx}
-                            href={link.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        ))}
-                      </div>
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="mt-3 flex flex-col gap-2 text-xs">
-                  <div className="flex items-center text-slate-500 dark:text-slate-400">
-                    <Calendar className="w-3.5 h-3.5 ml-1" />
-                    {sale.date}
-                  </div>
-                  {sale.notes && <div className="text-slate-500 dark:text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto custom-scrollbar">{sale.notes}</div>}
                 </div>
               </div>
             ))

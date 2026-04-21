@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Search, Users, User, AtSign, Calendar, FileText, CheckCircle, X, ShoppingBag } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Users, User, AtSign, Calendar, FileText, CheckCircle, X, ShoppingBag, Copy, Check } from 'lucide-react';
 import { Customer } from '../types';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { supabase } from '../supabaseClient';
@@ -17,6 +17,13 @@ export default function Customers() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const [formData, setFormData] = useState<Omit<Customer, 'id' | 'customer_number' | 'purchases'>>({
     name: '',
@@ -477,15 +484,15 @@ export default function Customers() {
           ) : (
             filteredCustomers.map((customer: any) => {
               return (
-                <div key={customer.id} className="p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                  <div className="flex justify-between items-start mb-3">
+                <div key={customer.id} className="p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex flex-col gap-3">
+                  <div className="flex justify-between items-start">
                     <div className="flex items-start">
                       <div className="flex-shrink-0 h-10 w-10 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-lg">
                         <User className="w-5 h-5" />
                       </div>
-                      <div className="ml-3 mr-3">
+                      <div className="ml-3 mr-3 mt-1">
                         <div 
-                          className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                          className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                           onClick={() => handleOpenModal(customer)}
                         >
                           {customer.name}
@@ -494,52 +501,68 @@ export default function Customers() {
                           </span>
                         </div>
                         {customer.username && (
-                          <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5" dir="ltr">
-                            <AtSign className="w-3 h-3" />
+                          <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5" dir="ltr">
+                            <AtSign className="w-3.5 h-3.5 shrink-0" />
                             {customer.username}
                           </span>
                         )}
+                        {customer.customer_code && (
+                           <div className="text-sm font-mono text-slate-600 dark:text-slate-400 mt-1">
+                             <span className="text-slate-400 text-xs mr-1">كود:</span>
+                             {customer.customer_code}
+                           </div>
+                        )}
                       </div>
                     </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                    <div className="flex flex-col">
+                      <span className="text-slate-400 mb-1 flex items-center gap-1"><ShoppingBag className="w-3.5 h-3.5"/> مرات الشراء</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300 text-sm">{customer.derivedPurchaseCount || 0}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-slate-400 mb-1 flex items-center gap-1"><Calendar className="w-3.5 h-3.5"/> أخر شراء</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300 text-sm" dir="ltr">{customer.derivedLastPurchase || '-'}</span>
+                    </div>
+                  </div>
+
+                  {customer.notes && (
+                    <div className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-words bg-gray-50 dark:bg-slate-800 p-2.5 rounded-lg border border-gray-100 dark:border-slate-700/50">
+                      {customer.notes}
+                    </div>
+                  )}
+
+                  {/* Bottom Action Bar */}
+                  <div className="flex items-center justify-between pt-2 mt-1 border-t border-slate-100 dark:border-slate-700">
+                     <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopy(`الاسم: ${customer.name}\n${customer.username ? `يوزر: ${customer.username}\n` : ''}${customer.customer_code ? `كود: ${customer.customer_code}` : ''}`, `mob-${customer.id}`);
+                        }}
+                        className="flex-1 flex justify-center items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 py-2.5 rounded-lg transition-colors ml-2"
+                      >
+                        {copiedId === `mob-${customer.id}` ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                        <span className={copiedId === `mob-${customer.id}` ? "text-emerald-600 dark:text-emerald-400" : ""}>نسخ معلومات الزبون</span>
+                     </button>
+                    
                     {role === 'admin' && (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
                           onClick={() => handleOpenModal(customer)}
-                          className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
+                          className="p-2.5 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-colors"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteClick(customer.id)}
-                          className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                          className="p-2.5 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/40 transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     )}
                   </div>
-                  
-                  <div className="grid grid-cols-2 gap-2 mt-3 text-xs bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 dark:text-slate-400">المرات</span>
-                      <span className="font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded">
-                        {customer.derivedPurchaseCount}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 dark:text-slate-400">آخر شراء</span>
-                      <span className="font-medium text-slate-700 dark:text-slate-300">
-                        {customer.derivedLastPurchase || '-'}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  {customer.notes && (
-                    <div className="mt-3 text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto custom-scrollbar">
-                      <span className="font-medium text-slate-700 dark:text-slate-300 ml-1">ملاحظات:</span>
-                      {customer.notes}
-                    </div>
-                  )}
                 </div>
               );
             })

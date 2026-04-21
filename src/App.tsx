@@ -532,15 +532,15 @@ export default function App() {
               </div>
             ) : (
               filteredSubscriptions.map((sub) => (
-                <div key={sub.id} className="p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                  <div className="flex justify-between items-start mb-3">
+                <div key={sub.id} className="p-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex flex-col gap-3">
+                  <div className="flex justify-between items-start">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-lg">
+                      <div className="flex-shrink-0 h-12 w-12 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-xl">
                         {sub.name.charAt(0)}
                       </div>
                       <div className="ml-3 mr-3">
                         <div 
-                          className="text-sm font-bold text-slate-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                          className="text-base font-bold text-slate-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                           onClick={() => handleOpenModal(sub)}
                         >
                           {sub.name}
@@ -550,54 +550,71 @@ export default function App() {
                         </span>
                       </div>
                     </div>
+                    <div>{getStatusBadge(sub.expirationDate)}</div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                    <div className="flex items-center">
+                      <Calendar className="w-3.5 h-3.5 ml-1.5 text-slate-400 dark:text-slate-500 shrink-0" />
+                      <span className="truncate">تفعيل: {sub.activationDate || '-'}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <Calendar className="w-3.5 h-3.5 ml-1.5 text-slate-400 dark:text-slate-500 shrink-0" />
+                      <span className="truncate">انتهاء: {sub.expirationDate || '-'}</span>
+                    </div>
+                  </div>
+
+                  {(sub.account_username || sub.account_password) && (
+                    <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-lg p-2.5 text-sm flex flex-col gap-1.5">
+                       {sub.account_username && (
+                         <div className="flex items-center text-slate-700 dark:text-slate-300">
+                           <span className="text-gray-500 dark:text-slate-400 text-xs ml-2 w-8 shrink-0">يوزر:</span>
+                           <span className="font-medium truncate" dir="ltr">{sub.account_username}</span>
+                         </div>
+                       )}
+                       {sub.account_password && (
+                         <div className="flex items-center text-slate-700 dark:text-slate-300">
+                           <span className="text-gray-500 dark:text-slate-400 text-xs ml-2 w-8 shrink-0">رمز:</span>
+                           <span className="font-medium truncate" dir="ltr">{sub.account_password}</span>
+                         </div>
+                       )}
+                    </div>
+                  )}
+                  
+                  {sub.notes && (
+                    <div className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap break-words bg-gray-50 dark:bg-slate-800 p-2.5 rounded-lg border border-gray-100 dark:border-slate-700/50">
+                      {sub.notes}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2 mt-1 border-t border-slate-100 dark:border-slate-700">
+                     <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopyText(`يوزر: ${sub.account_username || 'لا يوجد'}\nرمز: ${sub.account_password || 'لا يوجد'}`, `mob-${sub.id}`);
+                        }}
+                        className="flex-1 flex justify-center items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 py-2.5 rounded-lg transition-colors ml-2"
+                      >
+                        {copiedId === `mob-${sub.id}` ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                        <span className={copiedId === `mob-${sub.id}` ? "text-emerald-600 dark:text-emerald-400" : ""}>نسخ الحساب</span>
+                     </button>
+                    
                     {role === 'admin' && (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
                           onClick={() => handleOpenModal(sub)}
-                          className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
+                          className="p-2.5 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-colors"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteClick(sub.id)}
-                          className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                          className="p-2.5 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/40 transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     )}
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-2 mt-3 text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg">
-                    {sub.activationDate && (
-                      <div className="flex items-center">
-                        <Calendar className="w-3.5 h-3.5 ml-1.5 text-slate-400 dark:text-slate-500" />
-                        <span>تفعيل: {sub.activationDate}</span>
-                      </div>
-                    )}
-                    {sub.expirationDate && (
-                      <div className="flex items-center">
-                        <Calendar className="w-3.5 h-3.5 ml-1.5 text-slate-400 dark:text-slate-500" />
-                        <span>انتهاء: {sub.expirationDate}</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="mt-3 flex flex-col gap-2">
-                    <div>{getStatusBadge(sub.expirationDate)}</div>
-                    {(sub.account_username || sub.account_password) && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCopyText(`يوزر: ${sub.account_username || 'لا يوجد'}\nرمز: ${sub.account_password || 'لا يوجد'}`, `mob-${sub.id}`);
-                        }}
-                        className="flex w-fit items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-100 dark:bg-slate-700/50 px-2.5 py-1.5 rounded-md transition-colors"
-                      >
-                        {copiedId === `mob-${sub.id}` ? <Check className="w-3.5 h-3.5 text-blue-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span className={copiedId === `mob-${sub.id}` ? "text-blue-600 dark:text-blue-400" : ""}>نسخ معلومات الحساب</span>
-                      </button>
-                    )}
-                    {sub.notes && <div className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto custom-scrollbar">{sub.notes}</div>}
                   </div>
                 </div>
               ))
