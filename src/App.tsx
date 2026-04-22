@@ -456,7 +456,7 @@ export default function App() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleCopyText(`يوزر: ${sub.account_username || 'لا يوجد'}\nرمز: ${sub.account_password || 'لا يوجد'}`, `desk-${sub.id}`);
+                                  handleCopyText(`اسم الحساب: ${sub.name}\nيوزر: ${sub.account_username || 'لا يوجد'}\nرمز: ${sub.account_password || 'لا يوجد'}`, `desk-${sub.id}`);
                                 }}
                                 className="flex w-fit items-center gap-1 mt-2 text-xs text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                               >
@@ -591,7 +591,7 @@ export default function App() {
                      <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleCopyText(`يوزر: ${sub.account_username || 'لا يوجد'}\nرمز: ${sub.account_password || 'لا يوجد'}`, `mob-${sub.id}`);
+                          handleCopyText(`اسم الحساب: ${sub.name}\nيوزر: ${sub.account_username || 'لا يوجد'}\nرمز: ${sub.account_password || 'لا يوجد'}`, `mob-${sub.id}`);
                         }}
                         className="flex-1 flex justify-center items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 py-2.5 rounded-lg transition-colors ml-2"
                       >
@@ -760,7 +760,10 @@ export default function App() {
                       <div className="flex justify-start">
                         <button
                           type="button"
-                          onClick={() => handleCopyText(`يوزر: ${formData.account_username}\nرمز: ${formData.account_password}`, 'sub-form')}
+                          onClick={() => {
+                            const namePart = formData.name ? `${formData.name}\n` : '';
+                            handleCopyText(`${namePart}يوزر: ${formData.account_username}\nرمز: ${formData.account_password}`, 'sub-form');
+                          }}
                           className="flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800"
                         >
                           {copiedId === 'sub-form' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}

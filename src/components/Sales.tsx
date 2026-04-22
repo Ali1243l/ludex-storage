@@ -73,16 +73,20 @@ export default function Sales() {
         
         if (timeFilter !== 'all') {
           const now = new Date();
-          let startDate = new Date();
+          const tzOffset = now.getTimezoneOffset() * 60000;
+          
           if (timeFilter === 'today') {
-            startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            const todayStr = new Date(now.getTime() - tzOffset).toISOString().split('T')[0];
+            query = query.eq('date', todayStr);
           } else if (timeFilter === '7days') {
-            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const sevenStr = new Date(sevenDaysAgo.getTime() - tzOffset).toISOString().split('T')[0];
+            query = query.gte('date', sevenStr);
           } else if (timeFilter === 'month') {
-            startDate.setDate(1);
-            startDate.setHours(0, 0, 0, 0);
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            const monthStr = new Date(monthStart.getTime() - tzOffset).toISOString().split('T')[0];
+            query = query.gte('date', monthStr);
           }
-          query = query.gte('created_at', startDate.toISOString());
         }
 
         const [{ data: sData }, { data: cData }] = await Promise.all([

@@ -1,11 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Search, Calendar, DollarSign, TrendingDown, TrendingUp, User, X, FileText, CheckCircle, Copy, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Calendar, DollarSign, TrendingDown, TrendingUp, User, X, FileText, CheckCircle, Copy, Check, Hash, Info } from 'lucide-react';
 import { Transaction, TransactionType } from '../types';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../AuthContext';
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
+
+const parseTransactionNotes = (notesStr?: string) => {
+  if (!notesStr) return { cleanNotes: '', refId: null };
+  const match = notesStr.match(/\[تلقائي\] رقم المبيعة المرجعي:\s*\[([^\]]+)\]/);
+  if (match) {
+    const refId = match[1];
+    const cleanNotes = notesStr.replace(match[0], '').trim();
+    return { cleanNotes, refId };
+  }
+  return { cleanNotes: notesStr, refId: null };
+};
 
 export default function Transactions() {
   const { role } = useAuth();
@@ -29,6 +40,7 @@ export default function Transactions() {
   });
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [hiddenRefId, setHiddenRefId] = useState<string | null>(null);
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -47,16 +59,20 @@ export default function Transactions() {
         
         if (timeFilter !== 'all') {
           const now = new Date();
-          let startDate = new Date();
+          const tzOffset = now.getTimezoneOffset() * 60000;
+          
           if (timeFilter === 'today') {
-            startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            const todayStr = new Date(now.getTime() - tzOffset).toISOString().split('T')[0];
+            query = query.eq('date', todayStr);
           } else if (timeFilter === '7days') {
-            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const sevenStr = new Date(sevenDaysAgo.getTime() - tzOffset).toISOString().split('T')[0];
+            query = query.gte('date', sevenStr);
           } else if (timeFilter === 'month') {
-            startDate.setDate(1);
-            startDate.setHours(0, 0, 0, 0);
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            const monthStr = new Date(monthStart.getTime() - tzOffset).toISOString().split('T')[0];
+            query = query.gte('date', monthStr);
           }
-          query = query.gte('created_at', startDate.toISOString());
         }
 
         const { data, error } = await query;
@@ -95,17 +111,20 @@ export default function Transactions() {
 
   const handleOpenModal = (tx?: Transaction) => {
     if (tx) {
+      const parsedNotes = parseTransactionNotes(tx.notes);
       setEditingTx(tx);
+      setHiddenRefId(parsedNotes.refId);
       setFormData({
         person: tx.person,
         username: tx.username || '',
         description: tx.description,
         amount: tx.amount,
         date: tx.date,
-        notes: tx.notes || '',
+        notes: parsedNotes.cleanNotes || '',
       });
     } else {
       setEditingTx(null);
+      setHiddenRefId(null);
       setFormData({
         person: '',
         username: '',
@@ -121,14 +140,23 @@ export default function Transactions() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingTx(null);
+    setHiddenRefId(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    let submitNotes = formData.notes || '';
+    if (hiddenRefId) {
+      submitNotes = submitNotes 
+        ? `${submitNotes}\n[تلقائي] رقم المبيعة المرجعي: [${hiddenRefId}]`
+        : `[تلقائي] رقم المبيعة المرجعي: [${hiddenRefId}]`;
+    }
+
     if (editingTx) {
       const { error } = await supabase
         .from('transactions')
-        .update({ ...formData, type: activeTab })
+        .update({ ...formData, notes: submitNotes, type: activeTab })
         .eq('id', editingTx.id);
       
       if (error) {
@@ -138,7 +166,7 @@ export default function Transactions() {
     } else {
       const { error } = await supabase
         .from('transactions')
-        .insert([{ ...formData, type: activeTab }]);
+        .insert([{ ...formData, notes: submitNotes, type: activeTab }]);
         
       if (error) {
         console.error("Error inserting:", error);
@@ -403,12 +431,20 @@ export default function Transactions() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900 dark:text-slate-200 whitespace-pre-wrap break-words min-w-[150px] max-w-[250px]">
-                        {tx.description}
+                      <div className="text-sm font-medium text-gray-900 dark:text-slate-200 whitespace-pre-wrap break-words min-w-[150px] max-w-[250px] flex items-center gap-2">
+                        <span>{tx.description}</span>
+                        {parseTransactionNotes(tx.notes).refId && (
+                          <div className="group relative inline-flex items-center justify-center cursor-help" title={`مرجع المبيعة: ${parseTransactionNotes(tx.notes).refId}`}>
+                            <Info className="w-4 h-4 text-slate-400 hover:text-blue-500 transition-colors" />
+                            <div className="absolute bottom-full right-0 lg:right-auto lg:left-1/2 lg:-translate-x-1/2 mb-2 hidden group-hover:block w-max bg-slate-800 text-white text-xs rounded py-1 px-2 z-50 shadow-lg">
+                              مرجع المبيعة: {parseTransactionNotes(tx.notes).refId}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      {tx.notes && (
+                      {parseTransactionNotes(tx.notes).cleanNotes && (
                         <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 whitespace-pre-wrap break-words min-w-[150px] max-w-[250px]">
-                          {tx.notes}
+                          {parseTransactionNotes(tx.notes).cleanNotes}
                         </div>
                       )}
                     </td>
@@ -509,14 +545,24 @@ export default function Transactions() {
                       </span>
                     )}
                   </div>
-                  <div className="space-y-1.5">
-                    <span className="text-xs text-slate-500 dark:text-slate-400 block">المنتج / الوصف</span>
-                    <p className="text-slate-900 dark:text-white whitespace-pre-wrap break-words">{tx.description}</p>
+                  <div className="space-y-1.5 flex justify-between items-start">
+                    <div className="flex-1">
+                      <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">المنتج / الوصف</span>
+                      <p className="text-slate-900 dark:text-white whitespace-pre-wrap break-words">{tx.description}</p>
+                    </div>
+                    {parseTransactionNotes(tx.notes).refId && (
+                      <div className="group relative inline-flex items-center justify-center cursor-help shrink-0 mt-4 px-2" title={`مرجع المبيعة: ${parseTransactionNotes(tx.notes).refId}`}>
+                        <Info className="w-5 h-5 text-slate-400 hover:text-blue-500 transition-colors" />
+                        <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-max bg-slate-800 text-white text-xs rounded py-1.5 px-3 z-50 shadow-lg border border-slate-700">
+                          مرجع المبيعة: {parseTransactionNotes(tx.notes).refId}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  {tx.notes && (
+                  {parseTransactionNotes(tx.notes).cleanNotes && (
                     <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 border-dashed">
                       <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">ملاحظات</span>
-                      <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">{tx.notes}</p>
+                      <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">{parseTransactionNotes(tx.notes).cleanNotes}</p>
                     </div>
                   )}
                 </div>
