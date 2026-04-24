@@ -57,7 +57,7 @@ export default function AIAssistant() {
 
       setMessages(prev => [...prev, { id: Date.now(), text: data.reply, sender: 'bot' }]);
     } catch (err: any) {
-      setMessages(prev => [...prev, { id: Date.now(), text: '❌ عذراً صار خطأ بالاتصال بالسيرفر.', sender: 'bot' }]);
+      setMessages(prev => [...prev, { id: Date.now(), text: '❌ عذراً: ' + (err.message || 'صار خطأ بالاتصال بالسيرفر.') , sender: 'bot' }]);
     } finally {
       setIsLoading(false);
     }

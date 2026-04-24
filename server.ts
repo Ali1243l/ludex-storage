@@ -345,7 +345,7 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
 
   const ai = getAiClient();
   const response = await ai.models.generateContent({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-3-flash-preview',
     contents: context,
     config: {
       systemInstruction: systemInstruction,
@@ -575,7 +575,7 @@ function startTelegramBot() {
 
       const ai = getAiClient();
       const response = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: context,
         config: {
           systemInstruction: "أنت مساعد ذكي لمتجر Ludex Store. اكتب تقريراً يومياً بلهجة عراقية بناءً على البيانات.",
