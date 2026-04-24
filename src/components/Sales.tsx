@@ -181,7 +181,7 @@ export default function Sales() {
       // A. Robust Search by Username
       if (finalCustomerUsername) {
          const { data } = await supabase.from('customers')
-           .select('id, purchases, customer_code, name, username')
+           .select('id, purchases, customer_code, name, username, total_spent')
            .eq('username', finalCustomerUsername)
            .limit(1); 
          
@@ -191,7 +191,7 @@ export default function Sales() {
       // Fallback search by name
       if (!existingCustomer && finalCustomerName && !finalCustomerUsername) {
          const { data } = await supabase.from('customers')
-           .select('id, purchases, customer_code, name, username')
+           .select('id, purchases, customer_code, name, username, total_spent')
            .ilike('name', finalCustomerName)
            .limit(1);
 
@@ -201,7 +201,7 @@ export default function Sales() {
       // Fallback search by existing customer code (useful during edit if name/username changed)
       if (!existingCustomer && finalCustomerCode) {
          const { data } = await supabase.from('customers')
-           .select('id, purchases, customer_code, name, username')
+           .select('id, purchases, customer_code, name, username, total_spent')
            .eq('customer_code', finalCustomerCode)
            .limit(1);
 
@@ -212,12 +212,31 @@ export default function Sales() {
         if (!finalCustomerCode && existingCustomer.customer_code) {
            finalCustomerCode = existingCustomer.customer_code;
         }
-        // If we are editing, or just found them, let's update their details to ensure they're up to date!
+
+        let customerUpdatePayload: any = {};
+        let needsUpdate = false;
+
+        // If we are editing, update details and adjust price difference
         if (editingSale && finalCustomerCode) {
-           const customerUpdatePayload = {
-              name: finalCustomerName || existingCustomer.name || 'زبون غير معروف',
-              username: finalCustomerUsername || existingCustomer.username || null,
-           };
+           customerUpdatePayload.name = finalCustomerName || existingCustomer.name || 'زبون غير معروف';
+           customerUpdatePayload.username = finalCustomerUsername || existingCustomer.username || null;
+           
+           const oldPrice = Number(editingSale.price) || 0;
+           const newPrice = Number(formData.price) || 0;
+           const diff = newPrice - oldPrice;
+           
+           if (diff !== 0) {
+             customerUpdatePayload.total_spent = (Number(existingCustomer.total_spent) || 0) + diff;
+           }
+           needsUpdate = true;
+        } else if (!editingSale && finalCustomerCode) {
+           // We are adding a new sale to an existing customer
+           const newPrice = Number(formData.price) || 0;
+           customerUpdatePayload.total_spent = (Number(existingCustomer.total_spent) || 0) + newPrice;   
+           needsUpdate = true;
+        }
+
+        if (needsUpdate) {
            await supabase.from('customers').update(customerUpdatePayload).eq('customer_code', finalCustomerCode);
         }
       } else {
@@ -241,7 +260,8 @@ export default function Sales() {
           name: finalCustomerName || 'زبون غير معروف',
           username: finalCustomerUsername || null,
           customer_code: finalCustomerCode,
-          customer_number: nextNumber
+          customer_number: nextNumber,
+          total_spent: Number(formData.price) || 0
         };
         
         const { error: customerCreateError } = await supabase.from('customers').insert([newCustomerPayload]);
@@ -339,11 +359,21 @@ export default function Sales() {
                const { data: otherSales } = await supabase.from('sales').select('id').eq('customerCode', saleToDel.customerCode).limit(1);
                if (!otherSales || otherSales.length === 0) {
                    await supabase.from('customers').delete().eq('customer_code', saleToDel.customerCode);
+               } else {
+                   const { data: c } = await supabase.from('customers').select('total_spent').eq('customer_code', saleToDel.customerCode).single();
+                   if (c && c.total_spent !== undefined) {
+                      await supabase.from('customers').update({ total_spent: Math.max(0, (Number(c.total_spent) || 0) - (Number(saleToDel.price) || 0)) }).eq('customer_code', saleToDel.customerCode);
+                   }
                }
             } else if (saleToDel.customerName) {
                const { data: otherSales } = await supabase.from('sales').select('id').eq('customerName', saleToDel.customerName).limit(1);
                if (!otherSales || otherSales.length === 0) {
                    await supabase.from('customers').delete().eq('name', saleToDel.customerName);
+               } else {
+                   const { data: c } = await supabase.from('customers').select('total_spent').eq('name', saleToDel.customerName).single();
+                   if (c && c.total_spent !== undefined) {
+                      await supabase.from('customers').update({ total_spent: Math.max(0, (Number(c.total_spent) || 0) - (Number(saleToDel.price) || 0)) }).eq('name', saleToDel.customerName);
+                   }
                }
             }
          } catch(err) {
@@ -380,11 +410,21 @@ export default function Sales() {
              const { data: otherSales } = await supabase.from('sales').select('id').eq('customerCode', saleToDel.customerCode).limit(1);
              if (!otherSales || otherSales.length === 0) {
                  await supabase.from('customers').delete().eq('customer_code', saleToDel.customerCode);
+             } else {
+                 const { data: c } = await supabase.from('customers').select('total_spent').eq('customer_code', saleToDel.customerCode).single();
+                 if (c && c.total_spent !== undefined) {
+                    await supabase.from('customers').update({ total_spent: Math.max(0, (Number(c.total_spent) || 0) - (Number(saleToDel.price) || 0)) }).eq('customer_code', saleToDel.customerCode);
+                 }
              }
           } else if (saleToDel.customerName) {
              const { data: otherSales } = await supabase.from('sales').select('id').eq('customerName', saleToDel.customerName).limit(1);
              if (!otherSales || otherSales.length === 0) {
                  await supabase.from('customers').delete().eq('name', saleToDel.customerName);
+             } else {
+                 const { data: c } = await supabase.from('customers').select('total_spent').eq('name', saleToDel.customerName).single();
+                 if (c && c.total_spent !== undefined) {
+                    await supabase.from('customers').update({ total_spent: Math.max(0, (Number(c.total_spent) || 0) - (Number(saleToDel.price) || 0)) }).eq('name', saleToDel.customerName);
+                 }
              }
           }
         } catch(err) {

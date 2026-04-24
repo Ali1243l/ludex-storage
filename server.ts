@@ -364,7 +364,7 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
   رسالة المدير: ${text}
   `;
 
-  const modelsToTry = ['gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview', 'gemini-3.1-pro-preview'];
+  const modelsToTry = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-pro'];
   let response;
   const ai = getAiClient();
 
@@ -400,26 +400,31 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
     let queryCust = supabase.from('customers').select('id, name, customer_code, customer_number').limit(1);
     
     // Clean username if provided
-    let cleanUsername = d.customerUsername ? d.customerUsername.replace(/@/g, '').trim() : null;
-    let cleanName = d.customerName ? d.customerName.trim() : null;
+    let cleanUsername = d.customerUsername ? d.customerUsername.replace(/@/g, '').trim().toLowerCase() : null;
+    let cleanName = d.customerName ? d.customerName.trim().toLowerCase() : null;
     
-    let existingCustQuery;
-    if (cleanUsername) {
-      existingCustQuery = await queryCust.ilike('username', `%${cleanUsername}%`);
-      if (!existingCustQuery.data || existingCustQuery.data.length === 0) {
-          // Fallback to name if username didn't match just in case
-          if (cleanName) {
-              const fallbackQuery = await supabase.from('customers').select('id, name, customer_code, customer_number').ilike('name', `%${cleanName}%`).limit(1);
-              existingCustQuery = fallbackQuery;
-          }
+    // Fetch all to bypass JSONB type mismatch errors with ilike
+    const { data: allCusts } = await supabase.from('customers').select('id, name, customer_code, customer_number, total_spent');
+    let existingCust: any[] = [];
+    
+    if (allCusts) {
+      for (const c of allCusts) {
+        let cName = typeof c.name === 'string' ? c.name.toLowerCase() : (c.name ? JSON.stringify(c.name).toLowerCase() : '');
+        let cUser = typeof c.username === 'string' ? c.username.toLowerCase() : (c.username ? JSON.stringify(c.username).toLowerCase() : '');
+        
+        let matched = false;
+        if (cleanUsername && cUser.includes(cleanUsername)) {
+          matched = true;
+        } else if (cleanName && cName.includes(cleanName)) {
+          matched = true;
+        }
+        
+        if (matched) {
+          existingCust.push(c);
+          break; // Stop at first match
+        }
       }
-    } else if (cleanName) {
-      existingCustQuery = await queryCust.ilike('name', `%${cleanName}%`);
-    } else {
-      existingCustQuery = await queryCust.eq('id', 'fail');
     }
-    
-    const { data: existingCust } = existingCustQuery;
     
     let previousBuyerAlert = "";
 
@@ -439,13 +444,17 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
         
         previousBuyerAlert = `\n\n---\n✅ هذا الزبون مشتري سابق!\n👤 اسم الزبون: ${customer.name || 'مجهول'}\n🆔 التسلسل (ID): #${customer.customer_number || 'غير متوفر'}\n🛒 عدد مرات الشراء: الشراء للمرة الـ ${purchaseCount}\n📅 تاريخ آخر شراء: ${lastDate}\n🤖 @LudexSheetsBot\n---`;
       }
+
+      // Add to total_spent
+      const newTotal = (Number(customer.total_spent) || 0) + price;
+      await supabase.from('customers').update({ total_spent: newTotal }).eq('id', customer.id);
     } else {
       let nextNumber = 1;
       const { data: maxData } = await supabase.from('customers').select('customer_number').order('customer_number', { ascending: false }).limit(1);
       if (maxData && maxData.length > 0 && maxData[0].customer_number) {
         nextNumber = parseInt(maxData[0].customer_number) + 1;
       }
-      await supabase.from('customers').insert([{ name: d.customerName || 'مجهول', username: d.customerUsername || null, customer_code: custCode, customer_number: nextNumber }]);
+      await supabase.from('customers').insert([{ name: d.customerName || 'مجهول', username: d.customerUsername || null, customer_code: custCode, customer_number: nextNumber, total_spent: price }]);
     }
 
     const { data: newSale, error: saleError } = await supabase.from('sales').insert([{
@@ -756,7 +765,7 @@ function startTelegramBot() {
       اكتب التقرير بشكل مرتب، واذكر إجمالي المبيعات (اجمع الأسعار)، وأهم الحركات. استخدم الإيموجي المناسبة.
       `;
 
-      const modelsToTry = ['gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview', 'gemini-3.1-pro-preview'];
+      const modelsToTry = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-pro'];
       let response;
       const ai = getAiClient();
 
@@ -798,6 +807,20 @@ async function startServer() {
   });
 
   // AI Chat Assistant inside app
+  app.get('/api/models', async (req, res) => {
+    try {
+      const ai = getAiClient();
+      const models = [];
+      const response = await ai.models.list();
+      for await (const m of response) {
+          models.push(m.name);
+      }
+      res.json({ models });
+    } catch(e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/chat-assistant", async (req, res) => {
     try {
       const { message } = req.body;

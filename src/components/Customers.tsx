@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Search, Users, User, AtSign, Calendar, FileText, CheckCircle, X, ShoppingBag, Copy, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Users, User, AtSign, Calendar, FileText, CheckCircle, X, ShoppingBag, Copy, Check, ChevronUp, ChevronDown } from 'lucide-react';
 import { Customer } from '../types';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { supabase } from '../supabaseClient';
@@ -303,7 +303,7 @@ export default function Customers() {
            ...customer,
            derivedPurchaseCount: purchaseCount,
            derivedLastPurchase: lastPurchaseDate,
-           totalSpent: totalSpent,
+           totalSpent: customer.total_spent != null ? Number(customer.total_spent) : totalSpent,
            purchaseHistory: purchaseHistory, // Add to customer object
         };
      });
@@ -448,22 +448,32 @@ export default function Customers() {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
             <thead className="bg-gray-50 dark:bg-slate-800/50">
               <tr>
-                <th scope="col" onClick={() => requestSort('id')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
-                  التسلسل (ID) {sortConfig?.key === 'id' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                <th scope="col" onClick={() => requestSort('id')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider select-none">
+                  <div className="flex items-center gap-1">
+                    التسلسل (ID) {sortConfig?.key === 'id' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                  </div>
                 </th>
-                <th scope="col" onClick={() => requestSort('name')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
-                  اسم الزبون {sortConfig?.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                <th scope="col" onClick={() => requestSort('name')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider select-none">
+                  <div className="flex items-center gap-1">
+                    اسم الزبون {sortConfig?.key === 'name' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                  </div>
                 </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">يوزر الحساب</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">كود الزبون</th>
-                <th scope="col" onClick={() => requestSort('purchases')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
-                  عدد المرات ذكياً {sortConfig?.key === 'purchases' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                <th scope="col" onClick={() => requestSort('purchases')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider select-none">
+                  <div className="flex items-center gap-1">
+                    عدد المرات {sortConfig?.key === 'purchases' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                  </div>
                 </th>
-                <th scope="col" onClick={() => requestSort('totalSpent')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
-                  إجمالي المبلغ {sortConfig?.key === 'totalSpent' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                <th scope="col" onClick={() => requestSort('totalSpent')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider select-none">
+                  <div className="flex items-center gap-1">
+                    إجمالي المبالغ {sortConfig?.key === 'totalSpent' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                  </div>
                 </th>
-                <th scope="col" onClick={() => requestSort('lastPurchase')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
-                  تاريخ آخر مبيعة {sortConfig?.key === 'lastPurchase' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                <th scope="col" onClick={() => requestSort('lastPurchase')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider select-none">
+                  <div className="flex items-center gap-1">
+                    تاريخ آخر مبيعة {sortConfig?.key === 'lastPurchase' && (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                  </div>
                 </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">الملاحظات</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">إجراءات</th>

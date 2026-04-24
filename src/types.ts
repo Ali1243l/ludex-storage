@@ -38,6 +38,7 @@ export interface Customer {
   username: string;
   purchases: Purchase[];
   notes: string;
+  total_spent?: number;
 }
 
 export interface PriceTier {
