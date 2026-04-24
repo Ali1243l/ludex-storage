@@ -254,12 +254,16 @@ try {
 let _aiClient: any = null;
 function getAiClient() {
   if (!_aiClient) {
-    let key = process.env.GEMINI_API_KEY;
+    let key = process.env.CUSTOM_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
     if (key) {
       key = key.replace(/['"]/g, '').trim();
     }
     if (!key) {
       throw new Error('GEMINI_API_KEY is not set');
+    }
+    console.log(`Debug: Using GEMINI_API_KEY starting with: ${key.substring(0, 5)}...`);
+    if (!key.startsWith('AIza')) {
+       console.warn('Warning: GEMINI_API_KEY does not start with AIza, it might be invalid.');
     }
     _aiClient = new GoogleGenAI({ apiKey: key });
   }
