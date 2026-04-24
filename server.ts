@@ -574,28 +574,34 @@ function startTelegramBot() {
 
   bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
-    const allowedChatIdStr = process.env.ALLOWED_CHAT_ID;
+    const allowedChatIdsStr = process.env.ALLOWED_CHAT_IDS || process.env.ALLOWED_CHAT_ID;
     
-    // Security Layer: Drop update if not from the allowed group
-    if (allowedChatIdStr && chatId.toString() !== allowedChatIdStr) {
-      console.log(`Dropped message from unauthorized chat ID: ${chatId}`);
-      return;
+    // Security Layer: Drop update if not from the allowed list
+    if (allowedChatIdsStr) {
+      const allowedIds = allowedChatIdsStr.split(',').map(id => id.trim());
+      if (!allowedIds.includes(chatId.toString())) {
+        console.log(`Dropped message from unauthorized chat ID: ${chatId}`);
+        try {
+          // دز رسالة إنو ما مسموح
+          await bot.sendMessage(chatId, `عذراً، غير مصرح لك باستخدام هذا البوت في هذه المحادثة.\n\nمعرف هذه المحادثة (الكروب أو الخاص) هو:\n\`${chatId}\`\n\nيرجى نسخ هذا الرقم (مع علامة السالب إذا كانت موجودة) وإضافته إلى إعدادات ALLOWED_CHAT_IDS في المشروع.`, { parse_mode: 'Markdown' });
+        } catch (e) {
+          console.error("Failed to send unauthorized message", e);
+        }
+        return;
+      }
     }
     
-    if (msg.chat.type === 'private') {
-      console.log(`Dropped message from private chat: ${chatId}`);
-      return;
-    }
-
+    const isPrivate = msg.chat.type === 'private';
     const BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || '@your_bot_username';
     const messageContent = msg.text || msg.caption || '';
 
     const isMention = messageContent.includes(BOT_USERNAME);
     const isReplyToBot = msg.reply_to_message?.from?.username === BOT_USERNAME.replace('@', '');
 
-    if (!messageContent || (!isMention && !isReplyToBot)) {
-      console.log(`Dropped message: No mention of ${BOT_USERNAME} and not a reply to bot.`);
-      return;
+    // بالخاص ما يحتاج منشن، بالكروب يحتاج منشن او ريبلاي
+    if (!messageContent || (!isPrivate && !isMention && !isReplyToBot)) {
+        console.log(`Dropped message: No mention of ${BOT_USERNAME} and not a reply to bot.`);
+        return;
     }
 
     const messageId = msg.message_id;
