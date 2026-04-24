@@ -278,7 +278,132 @@ if (token && token.includes("8650252213:AAEWuKEy4PZvNIgs98QcW75PbvGT1WFuplg")) {
 }
 let bot: TelegramBot | null = null;
 
-// سيتم تهيئة البوت فقط بعد نجاح تشغيل السيرفر
+// --- نهاية دوال مساعدة الذكاء الاصطناعي ---
+
+async function processBotMessage(text: string, supabase: any): Promise<string> {
+  if (!supabase) {
+    throw new Error('قاعدة البيانات غير متصلة.');
+  }
+
+  // جلب ملخص من قاعدة البيانات لتوفير سياق
+  const [customers, products, sales, transactions] = await Promise.all([
+    supabase.from('customers').select('name, username, customer_number').order('customer_number', { ascending: false }).limit(5),
+    supabase.from('products').select('name, sellingPrice, costPrice'),
+    supabase.from('sales').select('id, productName, price, date, customerName').order('date', { ascending: false }).limit(20),
+    supabase.from('transactions').select('id, type, amount, date, description, person').order('date', { ascending: false }).limit(20)
+  ]);
+  
+  const systemInstruction = `
+  أنت مدير قواعد بيانات ومساعد ذكي لمتجر Ludex Store. 
+  مهمتك قراءة رسالة صاحب المتجر وتحديد الإجراء المطلوب.
+  يجب أن يكون ردك دائماً بصيغة JSON صحيحة وفق الهيكل التالي:
+  
+  إذا كانت الرسالة تحتوي على عملية بيع منتج:
+  {
+    "action": "insert_sale",
+    "sale_data": {
+      "customerName": "اسم الزبون", "customerUsername": "يوزر الزبون (بدون @)", "productName": "المنتج", "price": السعر رقماً, "paymentMethod": "طريقة الدفع", "notes": "ملاحظات"
+    },
+    "message": "رسالة تأكيد مختصرة"
+  }
+
+  إذا كانت الرسالة لعملية شراء أو مصروف:
+  {
+    "action": "insert_purchase",
+    "purchase_data": {
+      "description": "الوصف", "cost": التكلفة رقماً, "seller": "البائع", "notes": "ملاحظات"
+    },
+    "message": "رسالة تأكيد مختصرة"
+  }
+
+  إذا كانت الرسالة لحذف أو تعديل مبيعة أو مصروف:
+  {
+    "action": "modify_record",
+    "operation": "delete" أو "update",
+    "table": "sales" أو "transactions",
+    "target_id": "رقم الـ id للسجل المطلوب (أبحَث عنه في البيانات المرفقة)",
+    "update_data": {} // الحقول المراد تحديثها في حال التعديل
+  }
+
+  إذا كانت الرسالة استفسار أو سؤال عام:
+  {
+    "action": "reply",
+    "message": "الإجابة السريعة المباشرة بلهجة عراقية بناءً على البيانات. وإذا طلب ملخص اليوم، فقم بحساب عدد المبيعات وإجمالي الأرباح من المعاملات."
+  }
+  `;
+
+  const baghdadTime = new Date(Date.now() + (3 * 60 * 60 * 1000));
+  const context = `
+  وقت بغداد الحالي: ${baghdadTime.toLocaleString('ar-IQ')}
+  البيانات الحالية للرجوع إليها:
+  - معلومات المنتجات: ${JSON.stringify(products.data)}
+  - أحدث 20 عملية بيع (للعثور على id): ${JSON.stringify(sales.data)}
+  - أحدث 20 مصروف/إيراد: ${JSON.stringify(transactions.data)}
+  
+  رسالة المدير: ${text}
+  `;
+
+  const ai = getAiClient();
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: context,
+    config: {
+      systemInstruction: systemInstruction,
+      responseMimeType: "application/json"
+    }
+  });
+
+  const parsed = JSON.parse(response.text || "{}");
+  const dateStr = baghdadTime.toISOString().split('T')[0];
+  const nowStr = new Date().toISOString(); 
+
+  if (parsed.action === 'insert_sale' && parsed.sale_data) {
+    const d = parsed.sale_data;
+    const price = Number(d.price) || 0;
+    
+    // Check or create customer
+    let custCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.random().toString().substring(2, 5);
+    let queryCust = supabase.from('customers').select('id, customer_code').limit(1);
+    const { data: existingCust } = await (d.customerUsername ? queryCust.eq('username', d.customerUsername) : (d.customerName ? queryCust.ilike('name', d.customerName) : queryCust.eq('id', 'fail')));
+    if (existingCust && existingCust.length > 0) custCode = existingCust[0].customer_code;
+    else await supabase.from('customers').insert([{ name: d.customerName || 'مجهول', username: d.customerUsername || null, customer_code: custCode, customer_number: Date.now()%1000 }]);
+
+    const { data: newSale, error: saleError } = await supabase.from('sales').insert([{
+      productName: d.productName || 'غير محدد', price, customerName: d.customerName || 'مجهول', customerUsername: d.customerUsername || null, customerCode: custCode, date: dateStr, notes: d.notes || ''
+    }]).select();
+
+    if (saleError) return `❌ خطأ في البيعة: ${saleError.message}`;
+
+    const { error: transError } = await supabase.from('transactions').insert([{
+      type: 'income', amount: price, date: dateStr, description: d.productName || 'مبيعة ذكية', person: d.customerName || 'مجهول', username: d.customerUsername || null, payment_method: d.paymentMethod || 'غير محدد', notes: `[تلقائي] رقم المبيعة: [${newSale[0]?.id}]`
+    }]);
+
+    if (transError) return `⚠️ المبيعة تسجلت بس بدون واردات: ${transError.message}`;
+    return `✅ تمت المبيعة!\n\n` + (parsed.message || '');
+  } 
+  else if (parsed.action === 'insert_purchase' && parsed.purchase_data) {
+    const d = parsed.purchase_data;
+    const { error } = await supabase.from('transactions').insert([{
+      type: 'expense', amount: Number(d.cost)||0, date: dateStr, description: d.description || 'مصروف', person: d.seller || 'جهة', payment_method: 'غير محدد', notes: d.notes||''
+    }]);
+    if (error) return `❌ خطأ بالمصروف: ${error.message}`;
+    return `💸 تم المصروف!\n\n` + (parsed.message || '');
+  } 
+  else if (parsed.action === 'modify_record' && parsed.target_id) {
+    if (parsed.operation === 'delete') {
+      const { error } = await supabase.from(parsed.table).delete().eq('id', parsed.target_id);
+      if (error) return `❌ صار خطأ بالحذف: ${error.message}`;
+      return `✅ تم الحذف بنجاح!`;
+    } else if (parsed.operation === 'update' && parsed.update_data) {
+      const { error } = await supabase.from(parsed.table).update(parsed.update_data).eq('id', parsed.target_id);
+      if (error) return `❌ صار خطأ بالتعديل: ${error.message}`;
+      return `✅ تم التعديل بنجاح!`;
+    }
+  }
+  
+  return parsed.message || 'عذراً ما فهمت.';
+}
+
 const activeChatIds = new Set<number>(); // حفظ معرفات المحادثات لإرسال التقرير اليومي
 const defaultChatIdStr = process.env.TELEGRAM_CHAT_ID;
 if (defaultChatIdStr) {
@@ -377,182 +502,8 @@ function startTelegramBot() {
     bot?.sendChatAction(chatId, 'typing');
 
     try {
-      if (!supabase) {
-        throw new Error('Supabase is not initialized. Please check your environment variables.');
-      }
-      
-      // جلب ملخص من قاعدة البيانات لتوفير سياق للذكاء الاصطناعي مع الحفاظ على السرعة
-      // جلب بيانات اليوم وآخر العمليات للاشتراكات والمعاملات
-      const [customers, products, sales, transactions] = await Promise.all([
-        supabase.from('customers').select('name, username, customer_number').order('customer_number', { ascending: false }).limit(5),
-        supabase.from('products').select('name, sellingPrice, costPrice'),
-        supabase.from('sales').select('productName, price, date, customerName').order('date', { ascending: false }).limit(20),
-        supabase.from('transactions').select('type, amount, date, description, person').order('date', { ascending: false }).limit(20)
-      ]);
-      
-      const systemInstruction = `
-      أنت مدير قواعد بيانات ومساعد ذكي لمتجر Ludex Store. 
-      مهمتك قراءة رسالة صاحب المتجر وتحديد ما إذا كانت رسالة لإدخال بيانات جديدة (مثل مبيعة جديدة أو شراء حساب/مصروفات) أم مجرد سؤال/استفسار.
-      يجب أن يكون ردك دائماً بصيغة JSON صحيحة وفق الهيكل التالي:
-      
-      إذا كانت الرسالة تحتوي على عملية بيع منتج لزبون:
-      {
-        "action": "insert_sale",
-        "sale_data": {
-          "customerName": "اسم الزبون",
-          "customerUsername": "يوزر الزبون (إذا وجد بدون @)",
-          "productName": "المنتج المباع",
-          "price": السعر كرقم فورا,
-          "paymentMethod": "طريقة الدفع (مثلاً زين كاش)",
-          "notes": "أي ملاحظات إضافية"
-        },
-        "message": "رسالة تأكيد مختصرة للمدير بلهجة عراقية"
-      }
-
-      إذا كانت الرسالة تحتوي على عملية شراء (مثلاً اشترينا حساب، أو دفع مصروفات):
-      {
-        "action": "insert_purchase",
-        "purchase_data": {
-          "description": "وصف الشراء أو المصروف (مثال: شراء حسابات)",
-          "cost": التكلفة كرقم,
-          "seller": "اسم البائع أو الجهة",
-          "notes": "ملاحظات الدفع أو المنصة"
-        },
-        "message": "رسالة تأكيد مختصرة للمدير بلهجة عراقية"
-      }
-
-      إذا كانت الرسالة استفسار أو سؤال عام (مثل "انطيني ملخص اليوم" أو "شكد بعنا اليوم"):
-      {
-        "action": "reply",
-        "message": "الإجابة السريعة المباشرة بلهجة عراقية بناءً على البيانات. وإذا طلب ملخص اليوم، فقم بحساب عدد المبيعات وإجمالي الأرباح من المعاملات الموجودة في البيانات للمبيعات والمصروفات الخاصة باليوم وأعطه إياها."
-      }
-      `;
-
-      const context = `
-      البيانات الحالية للرجوع إليها:
-      - معلومات المنتجات التي لدينا: ${JSON.stringify(products.data)}
-      - أحدث 20 عملية بيع (تتضمن المبيعات التي تمت اليوم مؤخرا): ${JSON.stringify(sales.data)}
-      - أحدث 20 عملية مصروفات أو إيرادات (المشتريات والمصروفات التي تمت اليوم): ${JSON.stringify(transactions.data)}
-      
-      معلومات الوقت الحالي لمعرفة "اليوم" أو "قبل شويه": ${new Date().toLocaleString('ar-IQ', { timeZone: 'Asia/Baghdad' })}
-      
-      رسالة المدير: ${text}
-      `;
-
-      const ai = getAiClient();
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: context,
-        config: {
-          systemInstruction: systemInstruction,
-          responseMimeType: "application/json"
-        }
-      });
-      
-      const responseText = response.text || "{}";
-      const parsed = JSON.parse(responseText);
-
-      if (parsed.action === 'insert_sale' && parsed.sale_data) {
-        const d = parsed.sale_data;
-        const price = Number(d.price) || 0;
-        const baghdadTime = new Date(Date.now() + (3 * 60 * 60 * 1000));
-        const dateStr = baghdadTime.toISOString().split('T')[0];
-        const nowStr = new Date().toISOString(); 
-        
-        // 1. Check or Create Customer
-        let custCode = '';
-        let queryCust = supabase.from('customers').select('id, customer_code, purchases');
-        
-        if (d.customerUsername) {
-           queryCust = queryCust.eq('username', d.customerUsername);
-        } else if (d.customerName) {
-           queryCust = queryCust.ilike('name', d.customerName);
-        } else {
-           queryCust = queryCust.eq('id', 'impossible-match'); // Fallback
-        }
-
-        const { data: existingCust } = await queryCust.limit(1);
-
-        if (existingCust && existingCust.length > 0) {
-          custCode = existingCust[0].customer_code;
-        } else {
-          custCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.floor(Math.random() * 1000);
-          await supabase.from('customers').insert([{
-            name: d.customerName || 'زبون غير معروف',
-            username: d.customerUsername || null,
-            customer_code: custCode,
-            purchases: 1,
-            created_at: nowStr
-          }]);
-        }
-
-        // 2. Insert Sale
-        const { data: newSale, error: saleError } = await supabase.from('sales').insert([{
-           productName: d.productName || 'منتج غير محدد',
-           price: price,
-           customerName: d.customerName || 'زبون غير معروف',
-           customerUsername: d.customerUsername || null,
-           customerCode: custCode,
-           date: dateStr,
-           notes: d.notes || ''
-        }]).select();
-
-        if (saleError) {
-           console.error("Sale insert error:", saleError);
-           bot?.sendMessage(chatId, `❌ عذراً، صار خطأ بتسجيل البيعة: ${saleError.message}`);
-           return;
-        }
-
-        // 3. Insert Transaction
-        const saleId = newSale && newSale.length > 0 ? newSale[0].id : '';
-        const { error: transError } = await supabase.from('transactions').insert([{
-           type: 'income',
-           amount: price,
-           date: dateStr,
-           description: d.productName || 'مبيعة من التليكرام',
-           person: d.customerName || 'زبون غير معروف',
-           username: d.customerUsername || null,
-           payment_method: d.paymentMethod || 'غير محدد',
-           notes: (d.notes ? d.notes + ' ' : '') + `[تلقائي] رقم المبيعة المرجعي: [${saleId}]`
-        }]);
-
-        if (transError) {
-           console.error("Transaction insert error:", transError);
-           bot?.sendMessage(chatId, `⚠️ البيعة تسجلت بس صار خطأ بتسجيلها بالواردات: ${transError.message}`);
-           return;
-        }
-
-        bot?.sendMessage(chatId, `✅ تم إضافة المبيعة بنجاح!\n\n` + parsed.message);
-      } 
-      else if (parsed.action === 'insert_purchase' && parsed.purchase_data) {
-        const d = parsed.purchase_data;
-        const cost = Number(d.cost) || 0;
-        const baghdadTime = new Date(Date.now() + (3 * 60 * 60 * 1000));
-        const dateStr = baghdadTime.toISOString().split('T')[0];
-        const nowStr = new Date().toISOString(); 
-
-        const { error: purchaseError } = await supabase.from('transactions').insert([{
-           type: 'expense',
-           amount: cost,
-           date: dateStr,
-           description: d.description || 'مصروف من التليكرام',
-           person: d.seller || 'جهة غير معروفة',
-           payment_method: 'غير محدد',
-           notes: d.notes || ''
-        }]);
-
-        if (purchaseError) {
-           console.error("Purchase insert error:", purchaseError);
-           bot?.sendMessage(chatId, `❌ عذراً، صار خطأ بتسجيل المصروف: ${purchaseError.message}`);
-           return;
-        }
-
-        bot?.sendMessage(chatId, `💸 تم تسجيل المصروف/الشراء بنجاح!\n\n` + parsed.message);
-      } 
-      else {
-        // Normal reply
-        bot?.sendMessage(chatId, parsed.message || 'عذراً، ما كدرت أفهم طلبك زين. تكدر توضح أكثر؟');
-      }
+      const replyMessage = await processBotMessage(text, supabase);
+      bot?.sendMessage(chatId, replyMessage);
 
     } catch (error: any) {
       console.error('Bot error:', error);
@@ -645,6 +596,21 @@ async function startServer() {
   // API routes FIRST
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", botActive: !!bot });
+  });
+
+  // AI Chat Assistant inside app
+  app.post("/api/chat-assistant", async (req, res) => {
+    try {
+      const { message } = req.body;
+      if (!message) return res.status(400).json({ error: "Message is required" });
+      if (!supabase) return res.status(500).json({ error: "Supabase not connected" });
+      
+      const reply = await processBotMessage(message, supabase);
+      res.json({ reply });
+    } catch (e: any) {
+      console.error("/api/chat-assistant error:", e);
+      res.status(500).json({ error: e.message || "Unknown error" });
+    }
   });
 
   // Vite middleware for development
