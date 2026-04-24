@@ -455,6 +455,8 @@ function startTelegramBot() {
       if (parsed.action === 'insert_sale' && parsed.sale_data) {
         const d = parsed.sale_data;
         const price = Number(d.price) || 0;
+        const baghdadTime = new Date(Date.now() + (3 * 60 * 60 * 1000));
+        const dateStr = baghdadTime.toISOString().split('T')[0];
         const nowStr = new Date().toISOString(); 
         
         // 1. Check or Create Customer
@@ -485,22 +487,28 @@ function startTelegramBot() {
         }
 
         // 2. Insert Sale
-        const { data: newSale } = await supabase.from('sales').insert([{
+        const { data: newSale, error: saleError } = await supabase.from('sales').insert([{
            productName: d.productName || 'منتج غير محدد',
            price: price,
            customerName: d.customerName || 'زبون غير معروف',
            customerUsername: d.customerUsername || null,
            customerCode: custCode,
-           date: nowStr,
+           date: dateStr,
            notes: d.notes || ''
         }]).select();
 
+        if (saleError) {
+           console.error("Sale insert error:", saleError);
+           bot?.sendMessage(chatId, `❌ عذراً، صار خطأ بتسجيل البيعة: ${saleError.message}`);
+           return;
+        }
+
         // 3. Insert Transaction
         const saleId = newSale && newSale.length > 0 ? newSale[0].id : '';
-        await supabase.from('transactions').insert([{
+        const { error: transError } = await supabase.from('transactions').insert([{
            type: 'income',
            amount: price,
-           date: nowStr,
+           date: dateStr,
            description: d.productName || 'مبيعة من التليكرام',
            person: d.customerName || 'زبون غير معروف',
            username: d.customerUsername || null,
@@ -508,22 +516,36 @@ function startTelegramBot() {
            notes: (d.notes ? d.notes + ' ' : '') + `[تلقائي] رقم المبيعة المرجعي: [${saleId}]`
         }]);
 
+        if (transError) {
+           console.error("Transaction insert error:", transError);
+           bot?.sendMessage(chatId, `⚠️ البيعة تسجلت بس صار خطأ بتسجيلها بالواردات: ${transError.message}`);
+           return;
+        }
+
         bot?.sendMessage(chatId, `✅ تم إضافة المبيعة بنجاح!\n\n` + parsed.message);
       } 
       else if (parsed.action === 'insert_purchase' && parsed.purchase_data) {
         const d = parsed.purchase_data;
         const cost = Number(d.cost) || 0;
+        const baghdadTime = new Date(Date.now() + (3 * 60 * 60 * 1000));
+        const dateStr = baghdadTime.toISOString().split('T')[0];
         const nowStr = new Date().toISOString(); 
 
-        await supabase.from('transactions').insert([{
+        const { error: purchaseError } = await supabase.from('transactions').insert([{
            type: 'expense',
            amount: cost,
-           date: nowStr,
+           date: dateStr,
            description: d.description || 'مصروف من التليكرام',
            person: d.seller || 'جهة غير معروفة',
            payment_method: 'غير محدد',
            notes: d.notes || ''
         }]);
+
+        if (purchaseError) {
+           console.error("Purchase insert error:", purchaseError);
+           bot?.sendMessage(chatId, `❌ عذراً، صار خطأ بتسجيل المصروف: ${purchaseError.message}`);
+           return;
+        }
 
         bot?.sendMessage(chatId, `💸 تم تسجيل المصروف/الشراء بنجاح!\n\n` + parsed.message);
       } 
