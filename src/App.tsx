@@ -10,7 +10,6 @@ import Suppliers from './components/Suppliers';
 import SettingsPage from './components/Settings';
 import UsersPage from './components/Users';
 import ConfirmDeleteModal from './components/ConfirmDeleteModal';
-import AIAssistant from './components/AIAssistant';
 import { supabase } from './supabaseClient';
 import { useAuth } from './AuthContext';
 import Login from './components/Login';
@@ -860,8 +859,6 @@ export default function App() {
           })}
         </div>
       </nav>
-      {/* AI Assistant Chatbot */}
-      <AIAssistant />
     </div>
   );
 }

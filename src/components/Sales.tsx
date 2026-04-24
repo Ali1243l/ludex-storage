@@ -39,7 +39,9 @@ export default function Sales() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [timeFilter, setTimeFilter] = useState<'today' | '7days' | 'month' | 'all'>('all');
+  const [timeFilter, setTimeFilter] = useState<'today' | '7days' | 'month' | 'all' | 'custom'>('all');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<SaleRecord | null>(null);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -86,6 +88,9 @@ export default function Sales() {
             const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
             const monthStr = new Date(monthStart.getTime() - tzOffset).toISOString().split('T')[0];
             query = query.gte('date', monthStr);
+          } else if (timeFilter === 'custom') {
+            if (customStartDate) query = query.gte('date', customStartDate);
+            if (customEndDate) query = query.lte('date', customEndDate);
           }
         }
 
@@ -124,7 +129,7 @@ export default function Sales() {
       clearTimeout(timeoutId);
       supabase.removeChannel(channel);
     };
-  }, [timeFilter]);
+  }, [timeFilter, customStartDate, customEndDate]);
 
   const handleOpenModal = (sale?: SaleRecord) => {
     if (sale) {
@@ -489,8 +494,26 @@ export default function Sales() {
               >
                 اليوم
               </button>
+              <button
+                onClick={() => setTimeFilter('custom')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${timeFilter === 'custom' ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'}`}
+              >
+                تخصيص
+              </button>
             </div>
           </div>
+          {timeFilter === 'custom' && (
+            <div className="flex flex-col sm:flex-row gap-3 mt-4 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700 w-full sm:w-1/2">
+              <div className="flex-1">
+                 <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">من تاريخ</label>
+                 <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} className="w-full text-sm border border-gray-300 dark:border-slate-600 rounded-md py-1.5 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-slate-700 text-slate-900 dark:text-white" />
+              </div>
+              <div className="flex-1">
+                 <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">إلى تاريخ</label>
+                 <input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} className="w-full text-sm border border-gray-300 dark:border-slate-600 rounded-md py-1.5 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-slate-700 text-slate-900 dark:text-white" />
+              </div>
+            </div>
+          )}
           {role === 'admin' && (
             <button
               onClick={() => handleOpenModal()}

@@ -399,8 +399,16 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
     let custCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.random().toString().substring(2, 5);
     let queryCust = supabase.from('customers').select('id, customer_code').limit(1);
     const { data: existingCust } = await (d.customerUsername ? queryCust.eq('username', d.customerUsername) : (d.customerName ? queryCust.ilike('name', d.customerName) : queryCust.eq('id', 'fail')));
-    if (existingCust && existingCust.length > 0) custCode = existingCust[0].customer_code;
-    else await supabase.from('customers').insert([{ name: d.customerName || 'مجهول', username: d.customerUsername || null, customer_code: custCode, customer_number: Date.now()%1000 }]);
+    if (existingCust && existingCust.length > 0) {
+      custCode = existingCust[0].customer_code;
+    } else {
+      let nextNumber = 1;
+      const { data: maxData } = await supabase.from('customers').select('customer_number').order('customer_number', { ascending: false }).limit(1);
+      if (maxData && maxData.length > 0 && maxData[0].customer_number) {
+        nextNumber = parseInt(maxData[0].customer_number) + 1;
+      }
+      await supabase.from('customers').insert([{ name: d.customerName || 'مجهول', username: d.customerUsername || null, customer_code: custCode, customer_number: nextNumber }]);
+    }
 
     const { data: newSale, error: saleError } = await supabase.from('sales').insert([{
       productName: d.productName || 'غير محدد', price, customerName: d.customerName || 'مجهول', customerUsername: d.customerUsername || null, customerCode: custCode, date: dateStr, notes: d.notes || ''
