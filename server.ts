@@ -316,9 +316,9 @@ function startTelegramBot() {
     // استخدام Polling في بيئة التطوير المحلية
     bot = new TelegramBot(token, { 
       polling: {
-        interval: 2000,
+        interval: 300,
         autoStart: true,
-        params: { timeout: 10 }
+        params: { timeout: 50 }
       }
     });
 
@@ -381,10 +381,11 @@ function startTelegramBot() {
         throw new Error('Supabase is not initialized. Please check your environment variables.');
       }
       
-      // جلب ملخص من قاعدة البيانات المعنية فقط لتسريع الاستجابة
-      const [customers, products] = await Promise.all([
-        supabase.from('customers').select('name, username, customer_number, notes').order('customer_number', { ascending: false }).limit(20),
-        supabase.from('products').select('name, sellingPrice, costPrice')
+      // جلب ملخص من قاعدة البيانات لتوفير سياق للذكاء الاصطناعي مع الحفاظ على السرعة
+      const [customers, products, sales] = await Promise.all([
+        supabase.from('customers').select('name, username, customer_number').order('customer_number', { ascending: false }).limit(10),
+        supabase.from('products').select('name, sellingPrice, costPrice'),
+        supabase.from('sales').select('productName, price, date, customerName').order('date', { ascending: false }).limit(20)
       ]);
       
       const systemInstruction = `
@@ -427,8 +428,10 @@ function startTelegramBot() {
 
       const context = `
       البيانات الحالية للرجوع إليها:
-      - آخر زبائن: ${JSON.stringify(customers.data)}
-      - منتجات المتجر: ${JSON.stringify(products.data)}
+      - معلومات المنتجات التي لدينا: ${JSON.stringify(products.data)}
+      - أحدث 20 عملية بيع (تتضمن المبيعات التي تمت اليوم مؤخرا): ${JSON.stringify(sales.data)}
+      
+      معلومات الوقت الحالي: ${new Date().toLocaleString('ar-IQ', { timeZone: 'Asia/Baghdad' })}
       
       رسالة المدير: ${text}
       `;
@@ -492,7 +495,7 @@ function startTelegramBot() {
         // 3. Insert Transaction
         const saleId = newSale && newSale.length > 0 ? newSale[0].id : '';
         await supabase.from('transactions').insert([{
-           type: 'واردات',
+           type: 'income',
            amount: price,
            date: nowStr,
            description: d.productName || 'مبيعة من التليكرام',
@@ -510,7 +513,7 @@ function startTelegramBot() {
         const nowStr = new Date().toISOString(); 
 
         await supabase.from('transactions').insert([{
-           type: 'مصروفات',
+           type: 'expense',
            amount: cost,
            date: nowStr,
            description: d.description || 'مصروف من التليكرام',
@@ -591,7 +594,7 @@ function startTelegramBot() {
 
       const ai = getAiClient();
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash',
         contents: context,
         config: {
           systemInstruction: "أنت مساعد ذكي لمتجر Ludex Store. اكتب تقريراً يومياً بلهجة عراقية بناءً على البيانات.",
