@@ -211,7 +211,13 @@ export default function Transactions() {
         (t.person || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (t.description || '').toLowerCase().includes(searchQuery.toLowerCase())
       )
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => {
+        const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (dateDiff === 0) {
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+        }
+        return dateDiff;
+      });
   }, [transactions, activeTab, searchQuery]);
 
   const currentMonthTotal = useMemo(() => {

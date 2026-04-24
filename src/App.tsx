@@ -214,7 +214,13 @@ export default function App() {
     return subscriptions.filter(sub =>
       (sub.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (sub.notes || '').toLowerCase().includes(searchQuery.toLowerCase())
-    ).sort((a, b) => new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime());
+    ).sort((a, b) => {
+      const dateDiff = new Date(a.expirationDate || 0).getTime() - new Date(b.expirationDate || 0).getTime();
+      if (dateDiff === 0) {
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      }
+      return dateDiff;
+    });
   }, [subscriptions, searchQuery]);
 
   const stats = useMemo(() => {

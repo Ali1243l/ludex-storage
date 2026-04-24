@@ -573,6 +573,31 @@ function startTelegramBot() {
   const processedMessages = new Set<number>();
 
   bot.on('message', async (msg) => {
+    const chatId = msg.chat.id;
+    const allowedChatIdStr = process.env.ALLOWED_CHAT_ID;
+    
+    // Security Layer: Drop update if not from the allowed group
+    if (allowedChatIdStr && chatId.toString() !== allowedChatIdStr) {
+      console.log(`Dropped message from unauthorized chat ID: ${chatId}`);
+      return;
+    }
+    
+    if (msg.chat.type === 'private') {
+      console.log(`Dropped message from private chat: ${chatId}`);
+      return;
+    }
+
+    const BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || '@your_bot_username';
+    const messageContent = msg.text || msg.caption || '';
+
+    const isMention = messageContent.includes(BOT_USERNAME);
+    const isReplyToBot = msg.reply_to_message?.from?.username === BOT_USERNAME.replace('@', '');
+
+    if (!messageContent || (!isMention && !isReplyToBot)) {
+      console.log(`Dropped message: No mention of ${BOT_USERNAME} and not a reply to bot.`);
+      return;
+    }
+
     const messageId = msg.message_id;
     
     // تم إزالة شرط تجاهل الرسائل القديمة لضمان استلام جميع الرسائل
@@ -592,9 +617,8 @@ function startTelegramBot() {
       if (firstItem) processedMessages.delete(firstItem);
     }
 
-    console.log('Received message from Telegram:', msg.text);
-    const chatId = msg.chat.id;
-    const text = msg.text;
+    console.log('Received message from Telegram:', messageContent);
+    const text = messageContent.replace(BOT_USERNAME, '').trim();
     
     // حفظ معرف المحادثة لإرسال التقرير اليومي التلقائي
     activeChatIds.add(chatId);

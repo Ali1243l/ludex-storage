@@ -7,6 +7,7 @@ export interface Subscription {
   category: string;
   account_username?: string;
   account_password?: string;
+  created_at?: string;
 }
 
 export type TransactionType = 'expense' | 'income';

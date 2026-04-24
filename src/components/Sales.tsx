@@ -403,7 +403,13 @@ export default function Sales() {
         (s.productName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (s.notes || '').toLowerCase().includes(searchQuery.toLowerCase())
       )
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => {
+        const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (dateDiff === 0) {
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+        }
+        return dateDiff;
+      });
   }, [sales, searchQuery]);
 
   const stats = useMemo(() => {
