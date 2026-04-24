@@ -343,15 +343,28 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
   رسالة المدير: ${text}
   `;
 
+  const modelsToTry = ['gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview', 'gemini-3.1-pro-preview'];
+  let response;
   const ai = getAiClient();
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: context,
-    config: {
-      systemInstruction: systemInstruction,
-      responseMimeType: "application/json"
+
+  for (let i = 0; i < modelsToTry.length; i++) {
+    try {
+      response = await ai.models.generateContent({
+        model: modelsToTry[i],
+        contents: context,
+        config: {
+          systemInstruction: systemInstruction,
+          responseMimeType: "application/json"
+        }
+      });
+      break; // Success
+    } catch (err: any) {
+      if (i === modelsToTry.length - 1) throw err;
+      console.warn(`Model ${modelsToTry[i]} failed, trying next... Error: ${err.message}`);
     }
-  });
+  }
+  
+  if (!response) throw new Error("Failed to generate content.");
 
   const parsed = JSON.parse(response.text || "{}");
   const dateStr = baghdadTime.toISOString().split('T')[0];
@@ -568,6 +581,12 @@ function startTelegramBot() {
       else if (error.message?.includes('429') || error.message?.includes('Quota exceeded')) {
         bot?.sendMessage(chatId, 'عذراً أستاذ، السيرفر عليه ضغط حالياً (تجاوزنا الحد المسموح للذكاء الاصطناعي). يرجى الانتظار دقيقة والمحاولة مرة ثانية. 🙏');
       }
+      else if (error.message?.includes('503') || error.message?.includes('high demand') || error.message?.includes('UNAVAILABLE')) {
+        bot?.sendMessage(chatId, 'عذراً أستاذ، سيرفرات الذكاء الاصطناعي عليها ضغط عالي حالياً. يرجى المحاولة بعد شوية. ⌛');
+      }
+      else if (error.message?.includes('404') || error.message?.includes('not found')) {
+        bot?.sendMessage(chatId, 'عذراً، الموديل المطلوب غير متوفر حالياً. راح نحاول نحلها بأقرب وقت.');
+      }
       else {
         bot?.sendMessage(chatId, `عذراً، صار خطأ أثناء معالجة طلبك.\n\nتفاصيل الخطأ للمطور:\n${error.message || 'خطأ غير معروف'}`);
       }
@@ -620,16 +639,27 @@ function startTelegramBot() {
       اكتب التقرير بشكل مرتب، واذكر إجمالي المبيعات (اجمع الأسعار)، وأهم الحركات. استخدم الإيموجي المناسبة.
       `;
 
+      const modelsToTry = ['gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview', 'gemini-3.1-pro-preview'];
+      let response;
       const ai = getAiClient();
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: context,
-        config: {
-          systemInstruction: "أنت مساعد ذكي لمتجر Ludex Store. اكتب تقريراً يومياً بلهجة عراقية بناءً على البيانات.",
-        }
-      });
 
-      const reportText = response.text || 'عذراً، لم أتمكن من توليد التقرير اليومي.';
+      for (let i = 0; i < modelsToTry.length; i++) {
+        try {
+          response = await ai.models.generateContent({
+            model: modelsToTry[i],
+            contents: context,
+            config: {
+              systemInstruction: "أنت مساعد ذكي لمتجر Ludex Store. اكتب تقريراً يومياً بلهجة عراقية بناءً على البيانات.",
+            }
+          });
+          break; // Success
+        } catch (err: any) {
+          if (i === modelsToTry.length - 1) throw err;
+          console.warn(`Model ${modelsToTry[i]} failed for daily report, trying next... Error: ${err.message}`);
+        }
+      }
+
+      const reportText = response?.text || 'عذراً، لم أتمكن من توليد التقرير اليومي.';
 
       for (const chatId of activeChatIds) {
         bot.sendMessage(chatId, `📊 **التقرير اليومي التلقائي** 📊\n\n${reportText}`, { parse_mode: 'Markdown' });

@@ -57,7 +57,19 @@ export default function AIAssistant() {
 
       setMessages(prev => [...prev, { id: Date.now(), text: data.reply, sender: 'bot' }]);
     } catch (err: any) {
-      setMessages(prev => [...prev, { id: Date.now(), text: '❌ عذراً: ' + (err.message || 'صار خطأ بالاتصال بالسيرفر.') , sender: 'bot' }]);
+      let errorMsg = 'صار خطأ بالاتصال بالسيرفر.';
+      if (err.message) {
+         if (err.message.includes('503') || err.message.includes('high demand') || err.message.includes('UNAVAILABLE')) {
+            errorMsg = 'سيرفرات الذكاء الاصطناعي عليها ضغط حالياً. يرجى المحاولة لاحقاً.';
+         } else if (err.message.includes('429') || err.message.includes('Quota exceeded')) {
+            errorMsg = 'تم تجاوز الحد المسموح للطلبات. يرجى الانتظار قليلاً.';
+         } else if (err.message.includes('API key') || err.message.includes('API_KEY')) {
+            errorMsg = 'مفتاح الذكاء الاصطناعي غير صالح.';
+         } else {
+            errorMsg = 'صار خطأ بالمعالجة.';
+         }
+      }
+      setMessages(prev => [...prev, { id: Date.now(), text: '❌ عذراً: ' + errorMsg, sender: 'bot' }]);
     } finally {
       setIsLoading(false);
     }
