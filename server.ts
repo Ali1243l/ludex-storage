@@ -345,7 +345,7 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
 
   const ai = getAiClient();
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.5-flash',
     contents: context,
     config: {
       systemInstruction: systemInstruction,
@@ -380,7 +380,7 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
     }
 
     const { error: transError } = await supabase.from('transactions').insert([{
-      type: 'income', amount: price, date: dateStr, description: d.productName || 'مبيعة ذكية', person: d.customerName || 'مجهول', username: d.customerUsername || null, payment_method: d.paymentMethod || 'غير محدد', notes: `[تلقائي] رقم المبيعة: [${newSale[0]?.id}]`
+      type: 'income', amount: price, date: dateStr, description: d.productName || 'مبيعة ذكية', person: d.customerName || 'مجهول', username: d.customerUsername || null, notes: `[تلقائي] رقم المبيعة: [${newSale[0]?.id}]`
     }]);
 
     if (transError) return `⚠️ المبيعة تسجلت بس بدون واردات: ${transError.message}`;
@@ -389,7 +389,7 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
   else if (parsed.action === 'insert_purchase' && parsed.purchase_data) {
     const d = parsed.purchase_data;
     const { error } = await supabase.from('transactions').insert([{
-      type: 'expense', amount: Number(d.cost)||0, date: dateStr, description: d.description || 'مصروف', person: d.seller || 'جهة', payment_method: 'غير محدد', notes: d.notes||''
+      type: 'expense', amount: Number(d.cost)||0, date: dateStr, description: d.description || 'مصروف', person: d.seller || 'جهة', notes: d.notes||''
     }]);
     if (error) return `❌ خطأ بالمصروف: ${error.message}`;
     return `💸 تم المصروف!\n\n` + (parsed.message || '');
@@ -575,7 +575,7 @@ function startTelegramBot() {
 
       const ai = getAiClient();
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash',
         contents: context,
         config: {
           systemInstruction: "أنت مساعد ذكي لمتجر Ludex Store. اكتب تقريراً يومياً بلهجة عراقية بناءً على البيانات.",
