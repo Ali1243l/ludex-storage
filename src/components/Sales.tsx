@@ -171,68 +171,78 @@ export default function Sales() {
     let finalCustomerCode = formData.customerCode ? formData.customerCode.trim() : '';
 
     try {
-      if (!editingSale) {
-        let existingCustomer: any = null;
-        
-        // A. Robust Search by Username
-        // Using limit(1) handles raw duplicates gracefully without throw-crashing like single() or maybeSingle()
-        if (finalCustomerUsername) {
-           const { data } = await supabase.from('customers')
-             .select('id, purchases, customer_code')
-             .eq('username', finalCustomerUsername)
-             .limit(1); 
-           
-           if (data && data.length > 0) existingCustomer = data[0];
+      let existingCustomer: any = null;
+      
+      // A. Robust Search by Username
+      if (finalCustomerUsername) {
+         const { data } = await supabase.from('customers')
+           .select('id, purchases, customer_code')
+           .eq('username', finalCustomerUsername)
+           .limit(1); 
+         
+         if (data && data.length > 0) existingCustomer = data[0];
+      }
+      
+      // Fallback search by name
+      if (!existingCustomer && finalCustomerName && !finalCustomerUsername) {
+         const { data } = await supabase.from('customers')
+           .select('id, purchases, customer_code')
+           .ilike('name', finalCustomerName)
+           .limit(1);
+
+         if (data && data.length > 0) existingCustomer = data[0];
+      }
+
+      // Fallback search by existing customer code (useful during edit if name/username changed)
+      if (!existingCustomer && finalCustomerCode) {
+         const { data } = await supabase.from('customers')
+           .select('id, purchases, customer_code')
+           .eq('customer_code', finalCustomerCode)
+           .limit(1);
+
+         if (data && data.length > 0) existingCustomer = data[0];
+      }
+
+      if (existingCustomer) {
+        if (!finalCustomerCode && existingCustomer.customer_code) {
+           finalCustomerCode = existingCustomer.customer_code;
         }
-        
-        // Fallback search by name
-        if (!existingCustomer && finalCustomerName && !finalCustomerUsername) {
-           const { data } = await supabase.from('customers')
-             .select('id, purchases, customer_code')
-             .ilike('name', finalCustomerName)
-             .limit(1);
-
-           if (data && data.length > 0) existingCustomer = data[0];
+        // If we are editing, or just found them, let's update their details to ensure they're up to date!
+        if (editingSale && finalCustomerCode) {
+           const customerUpdatePayload = {
+              name: finalCustomerName || existingCustomer.name || 'زبون غير معروف',
+              username: finalCustomerUsername || existingCustomer.username || null,
+           };
+           await supabase.from('customers').update(customerUpdatePayload).eq('customer_code', finalCustomerCode);
+        }
+      } else {
+        // Generate a new code ONLY if the UI didn't already supply one
+        if (!finalCustomerCode) {
+           finalCustomerCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.floor(Math.random() * 1000);
         }
 
-        if (existingCustomer) {
-          // CONDITION 1: Existing Customer
-          // No JSONB updates needed anymore! We just use their existing code
-          if (!finalCustomerCode && existingCustomer.customer_code) {
-             finalCustomerCode = existingCustomer.customer_code;
-          }
-            
-        } else {
-          // CONDITION 2: New Customer
-          // Generate a new code ONLY if the UI didn't already supply one
-          if (!finalCustomerCode) {
-             finalCustomerCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.floor(Math.random() * 1000);
-          }
-
-          const { data: maxData } = await supabase.from('customers')
-            .select('customer_number')
-            .not('customer_number', 'is', null)
-            .order('customer_number', { ascending: false })
-            .limit(1);
-            
-          let nextNumber = 1;
-          if (maxData && maxData.length > 0 && maxData[0].customer_number) {
-            nextNumber = maxData[0].customer_number + 1;
-          }
-
-          // Insert new customer purely with core data (No dirty JSON arrays)
-          const newCustomerPayload = {
-            name: finalCustomerName || 'زبون غير معروف',
-            username: finalCustomerUsername || null,
-            customer_code: finalCustomerCode,
-            customer_number: nextNumber
-          };
+        const { data: maxData } = await supabase.from('customers')
+          .select('customer_number')
+          .not('customer_number', 'is', null)
+          .order('customer_number', { ascending: false })
+          .limit(1);
           
-          const { error: customerCreateError } = await supabase.from('customers').insert([newCustomerPayload]);
-          
-          if (customerCreateError) {
-            console.error("Error creating customer:", customerCreateError);
-          }
+        let nextNumber = 1;
+        if (maxData && maxData.length > 0 && maxData[0].customer_number) {
+          nextNumber = maxData[0].customer_number + 1;
+        }
+
+        const newCustomerPayload = {
+          name: finalCustomerName || 'زبون غير معروف',
+          username: finalCustomerUsername || null,
+          customer_code: finalCustomerCode,
+          customer_number: nextNumber
+        };
+        
+        const { error: customerCreateError } = await supabase.from('customers').insert([newCustomerPayload]);
+        
+        if (customerCreateError) {
+          console.error("Error creating customer:", customerCreateError);
         }
       }
 
@@ -250,7 +260,26 @@ export default function Sales() {
 
       if (editingSale) {
         const { error } = await supabase.from('sales').update(dataToSubmit).eq('id', editingSale.id);
-        if (error) alert(`حدث خطأ أثناء التعديل: ${error.message}`);
+        if (error) {
+           alert(`حدث خطأ أثناء التعديل: ${error.message}`);
+        } else {
+           // Update corresponding transaction in Financials
+           const transactionUpdatePayload = {
+              person: finalCustomerName || finalCustomerCode || 'زبون غير معروف',
+              username: finalCustomerUsername || '',
+              description: formData.productName || 'مبيعة غير مسماة',
+              amount: Number(formData.price) || 0,
+              date: formData.date || new Date().toISOString().split('T')[0],
+           };
+           
+           const { error: transError } = await supabase.from('transactions')
+              .update(transactionUpdatePayload)
+              .like('notes', `%[تلقائي] رقم المبيعة المرجعي: [${editingSale.id}]%`);
+              
+           if (transError) {
+              console.error("Error updating transaction:", transError);
+           }
+        }
       } else {
         const { data: insertedSaleData, error } = await supabase.from('sales').insert([dataToSubmit]).select();
         if (error) {
