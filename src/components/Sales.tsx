@@ -314,15 +314,37 @@ export default function Sales() {
     }
   };
 
-  const handleDeleteClick = (id: string) => {
+  const handleDeleteClick = async (id: string) => {
     const skipWarning = localStorage.getItem('skipDeleteWarning') === 'true';
     if (skipWarning) {
-      // Delete associated transaction first if it exists
-      supabase.from('transactions').delete().like('notes', `%[تلقائي] رقم المبيعة المرجعي: [${id}]%`).then(() => {
-        supabase.from('sales').delete().eq('id', id).then(({ error }) => {
-          if (error) console.error("Error deleting:", error);
-        });
-      });
+      // 1. Fetch sale
+      const saleToDel = sales.find(s => s.id === id);
+
+      // 2. Delete transactions
+      await supabase.from('transactions').delete().or(`notes.ilike.%[تلقائي] رقم المبيعة المرجعي: [${id}]%,notes.ilike.%[تلقائي] رقم المبيعة: [${id}]%`);
+
+      // 3. Delete sale
+      const { error } = await supabase.from('sales').delete().eq('id', id);
+      if (error) {
+         console.error("Error deleting:", error);
+      } else if (saleToDel) {
+         // 4. Clean up customer
+         try {
+            if (saleToDel.customerCode) {
+               const { data: otherSales } = await supabase.from('sales').select('id').eq('customerCode', saleToDel.customerCode).limit(1);
+               if (!otherSales || otherSales.length === 0) {
+                   await supabase.from('customers').delete().eq('customer_code', saleToDel.customerCode);
+               }
+            } else if (saleToDel.customerName) {
+               const { data: otherSales } = await supabase.from('sales').select('id').eq('customerName', saleToDel.customerName).limit(1);
+               if (!otherSales || otherSales.length === 0) {
+                   await supabase.from('customers').delete().eq('name', saleToDel.customerName);
+               }
+            }
+         } catch(err) {
+            console.error(err);
+         }
+      }
     } else {
       setItemToDelete(id);
     }
@@ -330,15 +352,40 @@ export default function Sales() {
 
   const confirmDelete = async () => {
     if (itemToDelete) {
-      // Delete associated transaction first if it exists
-      await supabase.from('transactions').delete().like('notes', `%[تلقائي] رقم المبيعة المرجعي: [${itemToDelete}]%`);
+      // 1. Fetch sale to clean up customer if needed
+      const saleToDel = sales.find(s => s.id === itemToDelete);
 
+      // 2. Delete associated transaction first if it exists
+      // catch both UI generated and bot generated notes
+      await supabase.from('transactions').delete().or(`notes.ilike.%[تلقائي] رقم المبيعة المرجعي: [${itemToDelete}]%,notes.ilike.%[تلقائي] رقم المبيعة: [${itemToDelete}]%`);
+
+      // 3. Delete the sale itself
       const { error } = await supabase
         .from('sales')
         .delete()
         .eq('id', itemToDelete);
         
-      if (error) console.error("Error deleting:", error);
+      if (error) {
+        console.error("Error deleting:", error);
+      } else if (saleToDel) {
+        // 4. Delete customer from Customers if no other sales exist for them
+        // The user requested to delete from Customers and Financials
+        try {
+          if (saleToDel.customerCode) {
+             const { data: otherSales } = await supabase.from('sales').select('id').eq('customerCode', saleToDel.customerCode).limit(1);
+             if (!otherSales || otherSales.length === 0) {
+                 await supabase.from('customers').delete().eq('customer_code', saleToDel.customerCode);
+             }
+          } else if (saleToDel.customerName) {
+             const { data: otherSales } = await supabase.from('sales').select('id').eq('customerName', saleToDel.customerName).limit(1);
+             if (!otherSales || otherSales.length === 0) {
+                 await supabase.from('customers').delete().eq('name', saleToDel.customerName);
+             }
+          }
+        } catch(err) {
+          console.error("Error cleaning up customer:", err);
+        }
+      }
       setItemToDelete(null);
     }
   };

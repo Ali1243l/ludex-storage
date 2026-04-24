@@ -396,13 +396,60 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
   } 
   else if (parsed.action === 'modify_record' && parsed.target_id) {
     if (parsed.operation === 'delete') {
-      const { error } = await supabase.from(parsed.table).delete().eq('id', parsed.target_id);
-      if (error) return `❌ صار خطأ بالحذف: ${error.message}`;
-      return `✅ تم الحذف بنجاح!`;
+      if (parsed.table === 'sales') {
+         // fetch sale to get customer info
+         const { data: saleToDel } = await supabase.from('sales').select('*').eq('id', parsed.target_id).single();
+         if (saleToDel) {
+            // Delete associated transactions
+            await supabase.from('transactions').delete().or(`notes.ilike.%[تلقائي] رقم المبيعة المرجعي: [${parsed.target_id}]%,notes.ilike.%[تلقائي] رقم المبيعة: [${parsed.target_id}]%`);
+         }
+         const { error } = await supabase.from('sales').delete().eq('id', parsed.target_id);
+         if (error) return `❌ صار خطأ بالحذف: ${error.message}`;
+
+         if (saleToDel) {
+            // Clean up customer if no other sales exist
+            try {
+               if (saleToDel.customerCode) {
+                  const { data: otherSales } = await supabase.from('sales').select('id').eq('customerCode', saleToDel.customerCode).limit(1);
+                  if (!otherSales || otherSales.length === 0) {
+                      await supabase.from('customers').delete().eq('customer_code', saleToDel.customerCode);
+                  }
+               } else if (saleToDel.customerName) {
+                  const { data: otherSales } = await supabase.from('sales').select('id').eq('customerName', saleToDel.customerName).limit(1);
+                  if (!otherSales || otherSales.length === 0) {
+                      await supabase.from('customers').delete().eq('name', saleToDel.customerName);
+                  }
+               }
+            } catch(err) {
+               console.error("Error cleaning up customer:", err);
+            }
+         }
+         return `✅ تم الحذف من المبيعات والقوائم المرتبطة بنجاح!`;
+      } else {
+         const { error } = await supabase.from(parsed.table).delete().eq('id', parsed.target_id);
+         if (error) return `❌ صار خطأ بالحذف: ${error.message}`;
+         return `✅ تم الحذف بنجاح!`;
+      }
     } else if (parsed.operation === 'update' && parsed.update_data) {
-      const { error } = await supabase.from(parsed.table).update(parsed.update_data).eq('id', parsed.target_id);
-      if (error) return `❌ صار خطأ بالتعديل: ${error.message}`;
-      return `✅ تم التعديل بنجاح!`;
+      if (parsed.table === 'sales') {
+         const { error } = await supabase.from('sales').update(parsed.update_data).eq('id', parsed.target_id);
+         if (error) return `❌ صار خطأ بالتعديل: ${error.message}`;
+         
+         // Update associated transaction
+         const transUpdate: any = {};
+         if (parsed.update_data.price !== undefined) transUpdate.amount = parsed.update_data.price;
+         if (parsed.update_data.productName !== undefined) transUpdate.description = parsed.update_data.productName;
+         if (parsed.update_data.date !== undefined) transUpdate.date = parsed.update_data.date;
+         
+         if (Object.keys(transUpdate).length > 0) {
+            await supabase.from('transactions').update(transUpdate).or(`notes.ilike.%[تلقائي] رقم المبيعة المرجعي: [${parsed.target_id}]%,notes.ilike.%[تلقائي] رقم المبيعة: [${parsed.target_id}]%`);
+         }
+         return `✅ تم تعديل المبيعة بنجاح!`;
+      } else {
+         const { error } = await supabase.from(parsed.table).update(parsed.update_data).eq('id', parsed.target_id);
+         if (error) return `❌ صار خطأ بالتعديل: ${error.message}`;
+         return `✅ تم التعديل بنجاح!`;
+      }
     }
   }
   
