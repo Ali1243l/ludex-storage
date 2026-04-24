@@ -382,10 +382,12 @@ function startTelegramBot() {
       }
       
       // جلب ملخص من قاعدة البيانات لتوفير سياق للذكاء الاصطناعي مع الحفاظ على السرعة
-      const [customers, products, sales] = await Promise.all([
-        supabase.from('customers').select('name, username, customer_number').order('customer_number', { ascending: false }).limit(10),
+      // جلب بيانات اليوم وآخر العمليات للاشتراكات والمعاملات
+      const [customers, products, sales, transactions] = await Promise.all([
+        supabase.from('customers').select('name, username, customer_number').order('customer_number', { ascending: false }).limit(5),
         supabase.from('products').select('name, sellingPrice, costPrice'),
-        supabase.from('sales').select('productName, price, date, customerName').order('date', { ascending: false }).limit(20)
+        supabase.from('sales').select('productName, price, date, customerName').order('date', { ascending: false }).limit(20),
+        supabase.from('transactions').select('type, amount, date, description, person').order('date', { ascending: false }).limit(20)
       ]);
       
       const systemInstruction = `
@@ -419,10 +421,10 @@ function startTelegramBot() {
         "message": "رسالة تأكيد مختصرة للمدير بلهجة عراقية"
       }
 
-      إذا كانت الرسالة استفسار أو سؤال عام:
+      إذا كانت الرسالة استفسار أو سؤال عام (مثل "انطيني ملخص اليوم" أو "شكد بعنا اليوم"):
       {
         "action": "reply",
-        "message": "الإجابة السريعة المباشرة بلهجة عراقية بناءً على البيانات المرفقة إن لزم الأمر."
+        "message": "الإجابة السريعة المباشرة بلهجة عراقية بناءً على البيانات. وإذا طلب ملخص اليوم، فقم بحساب عدد المبيعات وإجمالي الأرباح من المعاملات الموجودة في البيانات للمبيعات والمصروفات الخاصة باليوم وأعطه إياها."
       }
       `;
 
@@ -430,8 +432,9 @@ function startTelegramBot() {
       البيانات الحالية للرجوع إليها:
       - معلومات المنتجات التي لدينا: ${JSON.stringify(products.data)}
       - أحدث 20 عملية بيع (تتضمن المبيعات التي تمت اليوم مؤخرا): ${JSON.stringify(sales.data)}
+      - أحدث 20 عملية مصروفات أو إيرادات (المشتريات والمصروفات التي تمت اليوم): ${JSON.stringify(transactions.data)}
       
-      معلومات الوقت الحالي: ${new Date().toLocaleString('ar-IQ', { timeZone: 'Asia/Baghdad' })}
+      معلومات الوقت الحالي لمعرفة "اليوم" أو "قبل شويه": ${new Date().toLocaleString('ar-IQ', { timeZone: 'Asia/Baghdad' })}
       
       رسالة المدير: ${text}
       `;
