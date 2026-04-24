@@ -254,7 +254,10 @@ try {
 let _aiClient: any = null;
 function getAiClient() {
   if (!_aiClient) {
-    const key = process.env.GEMINI_API_KEY;
+    let key = process.env.GEMINI_API_KEY;
+    if (key) {
+      key = key.replace(/['"]/g, '').trim();
+    }
     if (!key) {
       throw new Error('GEMINI_API_KEY is not set');
     }
