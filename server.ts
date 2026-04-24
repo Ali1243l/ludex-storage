@@ -397,10 +397,27 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
     
     // Check or create customer
     let custCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.random().toString().substring(2, 5);
-    let queryCust = supabase.from('customers').select('id, customer_code').limit(1);
+    let queryCust = supabase.from('customers').select('id, name, customer_code, customer_number').limit(1);
     const { data: existingCust } = await (d.customerUsername ? queryCust.eq('username', d.customerUsername) : (d.customerName ? queryCust.ilike('name', d.customerName) : queryCust.eq('id', 'fail')));
+    
+    let previousBuyerAlert = "";
+
     if (existingCust && existingCust.length > 0) {
-      custCode = existingCust[0].customer_code;
+      const customer = existingCust[0];
+      custCode = customer.customer_code;
+      
+      // Fetch previous sales to get count and last purchase date
+      const { data: previousSales } = await supabase.from('sales')
+        .select('date')
+        .eq('customerCode', custCode)
+        .order('date', { ascending: false });
+        
+      if (previousSales && previousSales.length > 0) {
+        const purchaseCount = previousSales.length + 1; // +1 to include this current purchase
+        const lastDate = previousSales[0].date;
+        
+        previousBuyerAlert = `\n\n---\n✅ هذا الزبون مشتري سابق!\n👤 اسم الزبون: ${customer.name || 'مجهول'}\n🆔 التسلسل (ID): #${customer.customer_number || 'غير متوفر'}\n🛒 عدد مرات الشراء: الشراء للمرة الـ ${purchaseCount}\n📅 تاريخ آخر شراء: ${lastDate}\n🤖 @LudexSheetsBot\n---`;
+      }
     } else {
       let nextNumber = 1;
       const { data: maxData } = await supabase.from('customers').select('customer_number').order('customer_number', { ascending: false }).limit(1);
@@ -425,8 +442,8 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
       type: 'income', amount: price, date: dateStr, description: d.productName || 'مبيعة ذكية', person: d.customerName || 'مجهول', username: d.customerUsername || null, notes: `[تلقائي] رقم المبيعة: [${newSale[0]?.id}]`
     }]);
 
-    if (transError) return `⚠️ المبيعة تسجلت بس بدون واردات: ${transError.message}`;
-    return `✅ تمت المبيعة!\n\n` + (parsed.message || '');
+    if (transError) return `⚠️ المبيعة تسجلت بس بدون واردات: ${transError.message}${previousBuyerAlert}`;
+    return `✅ تمت المبيعة!\n\n${parsed.message || ''}${previousBuyerAlert}`;
   } 
   else if (parsed.action === 'insert_transaction' && parsed.transaction_data) {
     const d = parsed.transaction_data;

@@ -19,6 +19,16 @@ export default function Customers() {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>({ key: 'lastPurchase', direction: 'desc' });
+
+  const requestSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -280,17 +290,20 @@ export default function Customers() {
         const purchaseCount = theirSales.length;
         let lastPurchaseDate = null;
         let purchaseHistory = [];
+        let totalSpent = 0;
         
         if (purchaseCount > 0) {
            const sortedSales = [...theirSales].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
            lastPurchaseDate = sortedSales[0].date;
            purchaseHistory = sortedSales; // Store full sorted history
+           totalSpent = theirSales.reduce((sum, sale) => sum + (Number(sale.price) || 0), 0);
         }
 
         return {
            ...customer,
            derivedPurchaseCount: purchaseCount,
            derivedLastPurchase: lastPurchaseDate,
+           totalSpent: totalSpent,
            purchaseHistory: purchaseHistory, // Add to customer object
         };
      });
@@ -298,24 +311,54 @@ export default function Customers() {
 
 
   const filteredCustomers = useMemo(() => {
-    return customersWithDerivedSales
+    let filtered = customersWithDerivedSales
       .filter((c: any) =>
         (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (c.username || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (c.notes || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (c.customer_number?.toString() || '').includes(searchQuery)
-      )
-      .sort((a: any, b: any) => {
-        const aDate = a.derivedLastPurchase ? new Date(a.derivedLastPurchase).getTime() : 0;
-        const bDate = b.derivedLastPurchase ? new Date(b.derivedLastPurchase).getTime() : 0;
-        
-        if (aDate === 0 && bDate === 0) {
-           return (b.customer_number || 0) - (a.customer_number || 0);
+      );
+
+    if (sortConfig !== null) {
+      filtered.sort((a: any, b: any) => {
+        let aValue, bValue;
+        switch (sortConfig.key) {
+          case 'id':
+            aValue = a.customer_number || 0;
+            bValue = b.customer_number || 0;
+            break;
+          case 'name':
+            aValue = (a.name || '').toLowerCase();
+            bValue = (b.name || '').toLowerCase();
+            break;
+          case 'purchases':
+            aValue = a.derivedPurchaseCount || 0;
+            bValue = b.derivedPurchaseCount || 0;
+            break;
+          case 'totalSpent':
+            aValue = a.totalSpent || 0;
+            bValue = b.totalSpent || 0;
+            break;
+          case 'lastPurchase':
+            aValue = a.derivedLastPurchase ? new Date(a.derivedLastPurchase).getTime() : 0;
+            bValue = b.derivedLastPurchase ? new Date(b.derivedLastPurchase).getTime() : 0;
+            break;
+          default:
+            return 0;
         }
-        
-        return bDate - aDate;
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
       });
-  }, [customersWithDerivedSales, searchQuery]);
+    }
+
+    return filtered;
+  }, [customersWithDerivedSales, searchQuery, sortConfig]);
 
   const stats = useMemo(() => {
     const totalCustomers = customers.length;
@@ -356,17 +399,38 @@ export default function Customers() {
       {/* Actions and List */}
       <div className="bg-white dark:bg-slate-800 shadow-sm rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden transition-colors duration-200">
         <div className="p-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/50 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="relative w-full sm:max-w-md">
-            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400 dark:text-slate-500" />
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:max-w-xl">
+            <div className="relative w-full sm:max-w-md">
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400 dark:text-slate-500" />
+              </div>
+              <input
+                type="text"
+                className="block w-full pl-3 pr-10 py-2 border border-gray-300 dark:border-slate-600 rounded-md leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
+                placeholder="ابحث عن زبون، يوزر، أو ملاحظة..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
-            <input
-              type="text"
-              className="block w-full pl-3 pr-10 py-2 border border-gray-300 dark:border-slate-600 rounded-md leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
-              placeholder="ابحث عن زبون، يوزر، أو ملاحظة..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+            <select
+              value={`${sortConfig?.key || 'lastPurchase'}-${sortConfig?.direction || 'desc'}`}
+              onChange={(e) => {
+                const [key, direction] = e.target.value.split('-');
+                setSortConfig({ key, direction: direction as 'asc' | 'desc' });
+              }}
+              className="md:hidden block w-full sm:w-auto py-2 px-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            >
+               <option value="lastPurchase-desc">الأحدث الشراء أخر</option>
+               <option value="lastPurchase-asc">الأقدم الشراء أخر</option>
+               <option value="id-asc">التسلسل تصاعدي</option>
+               <option value="id-desc">التسلسل تنازلي</option>
+               <option value="name-asc">تصنيف حسب الاسم (أ-ي)</option>
+               <option value="name-desc">تصنيف حسب الاسم (ي-أ)</option>
+               <option value="purchases-desc">عدد المرات ذكياً (الأعلى)</option>
+               <option value="purchases-asc">عدد المرات ذكياً (الأقل)</option>
+               <option value="totalSpent-desc">إجمالي المبلغ (الأعلى)</option>
+               <option value="totalSpent-asc">إجمالي المبلغ (الأقل)</option>
+            </select>
           </div>
           {role === 'admin' && (
             <button
@@ -384,12 +448,23 @@ export default function Customers() {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
             <thead className="bg-gray-50 dark:bg-slate-800/50">
               <tr>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">التسلسل (ID)</th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">اسم الزبون</th>
+                <th scope="col" onClick={() => requestSort('id')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  التسلسل (ID) {sortConfig?.key === 'id' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
+                <th scope="col" onClick={() => requestSort('name')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  اسم الزبون {sortConfig?.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">يوزر الحساب</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">كود الزبون</th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">عدد المرات ذكياً</th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">تاريخ آخر مبيعة</th>
+                <th scope="col" onClick={() => requestSort('purchases')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  عدد المرات ذكياً {sortConfig?.key === 'purchases' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
+                <th scope="col" onClick={() => requestSort('totalSpent')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  إجمالي المبلغ {sortConfig?.key === 'totalSpent' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
+                <th scope="col" onClick={() => requestSort('lastPurchase')} className="cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  تاريخ آخر مبيعة {sortConfig?.key === 'lastPurchase' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">الملاحظات</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">إجراءات</th>
               </tr>
@@ -397,7 +472,7 @@ export default function Customers() {
             <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan={9} className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
                     <div className="flex flex-col items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mb-4"></div>
                       <p className="text-lg font-medium text-slate-900 dark:text-white">جاري تحميل البيانات...</p>
@@ -407,7 +482,7 @@ export default function Customers() {
                 </tr>
               ) : filteredCustomers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan={9} className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
                     <div className="flex flex-col items-center justify-center">
                       <Users className="w-12 h-12 text-slate-300 dark:text-slate-600 mb-4" />
                       <p className="text-lg font-medium text-slate-900 dark:text-white">لا يوجد زبائن</p>
@@ -445,6 +520,11 @@ export default function Customers() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-500/10 text-blue-800 dark:text-blue-400">
                           {customer.derivedPurchaseCount} مرات
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center font-bold text-sm text-emerald-600 dark:text-emerald-400">
+                          {(customer.totalSpent || 0).toLocaleString('en-US')} د.ع
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-slate-400">
@@ -541,10 +621,14 @@ export default function Customers() {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                  <div className="grid grid-cols-3 gap-2 text-xs bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
                     <div className="flex flex-col">
                       <span className="text-slate-400 mb-1 flex items-center gap-1"><ShoppingBag className="w-3.5 h-3.5"/> مرات الشراء</span>
                       <span className="font-bold text-slate-700 dark:text-slate-300 text-sm">{customer.derivedPurchaseCount || 0}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-slate-400 mb-1 flex items-center gap-1">المبلغ</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">{(customer.totalSpent || 0).toLocaleString('en-US')}</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-slate-400 mb-1 flex items-center gap-1"><Calendar className="w-3.5 h-3.5"/> أخر شراء</span>
