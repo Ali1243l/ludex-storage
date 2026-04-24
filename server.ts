@@ -295,10 +295,15 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
   
   const systemInstruction = `
   أنت مدير قواعد بيانات ومساعد ذكي لمتجر Ludex Store. 
-  مهمتك قراءة رسالة صاحب المتجر وتحديد الإجراء المطلوب.
+  مهمتك قراءة رسالة مدير المتجر وتحديد الإجراء المطلوب بدقة.
+  لا تفترض القائمة، اقرأ بذكاء:
+  - إذا قال "سجل مبيعة" أو "بعت" -> القائمة سجل البيع (sales).
+  - إذا قال "مصروف" أو "صرفنا" أو "سجل بالمالية" -> القائمة المالية لسجل المصاريف (transactions).
+  - إذا قال "سجل حساب" أو "اشتراك جديد" أو "بسجل الحسابات" -> قائمة سجل الحسابات (subscriptions).
+  
   يجب أن يكون ردك دائماً بصيغة JSON صحيحة وفق الهيكل التالي:
   
-  إذا كانت الرسالة تحتوي على عملية بيع منتج:
+  إذا كانت الرسالة لحفظ مبيعة (سجل البيع):
   {
     "action": "insert_sale",
     "sale_data": {
@@ -307,20 +312,34 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
     "message": "رسالة تأكيد مختصرة"
   }
 
-  إذا كانت الرسالة لعملية شراء أو مصروف:
+  إذا كانت الرسالة لحفظ مصروف أو إيراد مالي مباشر (المالية):
   {
-    "action": "insert_purchase",
-    "purchase_data": {
-      "description": "الوصف", "cost": التكلفة رقماً, "seller": "البائع", "notes": "ملاحظات"
+    "action": "insert_transaction",
+    "transaction_data": {
+      "type": "expense" (إذا صرف) أو "income" (إذا وارد),
+      "description": "الوصف", "amount": التكلفة رقماً, "person": "الجهة أو الشخص", "notes": "ملاحظات"
     },
     "message": "رسالة تأكيد مختصرة"
   }
 
-  إذا كانت الرسالة لحذف أو تعديل مبيعة أو مصروف:
+  إذا كانت الرسالة لحفظ حساب أو اشتراك جديد (سجل الحسابات):
+  {
+    "action": "insert_subscription",
+    "subscription_data": {
+      "name": "اسم الحساب أو الاشتراك",
+      "category": "تصنيف (مثلاً مشاهدة، العاب، عام)",
+      "activationDate": "تاريخ التفعيل YYYY-MM-DD",
+      "expirationDate": "تاريخ الانتهاء YYYY-MM-DD",
+      "notes": "ملاحظات إضافية والباسورد"
+    },
+    "message": "رسالة تأكيد مختصرة"
+  }
+
+  إذا كانت الرسالة لحذف أو تعديل أي شيء:
   {
     "action": "modify_record",
     "operation": "delete" أو "update",
-    "table": "sales" أو "transactions",
+    "table": "sales" أو "transactions" أو "subscriptions",
     "target_id": "رقم الـ id للسجل المطلوب (أبحَث عنه في البيانات المرفقة)",
     "update_data": {} // الحقول المراد تحديثها في حال التعديل
   }
@@ -328,7 +347,7 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
   إذا كانت الرسالة استفسار أو سؤال عام:
   {
     "action": "reply",
-    "message": "الإجابة السريعة المباشرة بلهجة عراقية بناءً على البيانات. وإذا طلب ملخص اليوم، فقم بحساب عدد المبيعات وإجمالي الأرباح من المعاملات."
+    "message": "الإجابة السريعة المباشرة بلهجة عراقية بناءً على البيانات."
   }
   `;
 
@@ -399,14 +418,26 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
     if (transError) return `⚠️ المبيعة تسجلت بس بدون واردات: ${transError.message}`;
     return `✅ تمت المبيعة!\n\n` + (parsed.message || '');
   } 
-  else if (parsed.action === 'insert_purchase' && parsed.purchase_data) {
-    const d = parsed.purchase_data;
+  else if (parsed.action === 'insert_transaction' && parsed.transaction_data) {
+    const d = parsed.transaction_data;
     const { error } = await supabase.from('transactions').insert([{
-      type: 'expense', amount: Number(d.cost)||0, date: dateStr, description: d.description || 'مصروف', person: d.seller || 'جهة', notes: d.notes||''
+      type: d.type === 'income' ? 'income' : 'expense', amount: Number(d.amount)||0, date: dateStr, description: d.description || (d.type === 'income' ? 'إيراد' : 'مصروف'), person: d.person || 'جهة', notes: d.notes||''
     }]);
-    if (error) return `❌ خطأ بالمصروف: ${error.message}`;
-    return `💸 تم المصروف!\n\n` + (parsed.message || '');
-  } 
+    if (error) return `❌ خطأ بالعملية المالية: ${error.message}`;
+    return (d.type === 'income' ? `💸 تم تسجيل الإيراد المالي!` : `💸 تم تسجيل المصروف!`) + `\n\n` + (parsed.message || '');
+  }
+  else if (parsed.action === 'insert_subscription' && parsed.subscription_data) {
+    const d = parsed.subscription_data;
+    const { error } = await supabase.from('subscriptions').insert([{
+      name: d.name || 'حساب ذكي',
+      category: d.category || 'عام',
+      activationDate: d.activationDate || null,
+      expirationDate: d.expirationDate || null,
+      notes: d.notes || ''
+    }]);
+    if (error) return `❌ خطأ في الإضافة لسجل الحسابات: ${error.message}`;
+    return `✅ تم تسجيل الحساب / الاشتراك بنجاح في سجل الحسابات!\n\n` + (parsed.message || '');
+  }
   else if (parsed.action === 'modify_record' && parsed.target_id) {
     if (parsed.operation === 'delete') {
       if (parsed.table === 'sales') {
