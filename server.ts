@@ -330,7 +330,9 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
       "category": "تصنيف (مثلاً مشاهدة، العاب، عام)",
       "activationDate": "تاريخ التفعيل YYYY-MM-DD",
       "expirationDate": "تاريخ الانتهاء YYYY-MM-DD",
-      "notes": "ملاحظات إضافية والباسورد"
+      "account_username": "الايميل أو يوزر الحساب (إن وجد)",
+      "account_password": "رمز الحساب أو الباسورد (إن وجد)",
+      "notes": "ملاحظات إضافية فقط (لا تضع الباسورد أو اليوزر هنا)"
     },
     "message": "رسالة تأكيد مختصرة"
   }
@@ -433,6 +435,8 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
       category: d.category || 'عام',
       activationDate: d.activationDate || null,
       expirationDate: d.expirationDate || null,
+      account_username: d.account_username || null,
+      account_password: d.account_password || null,
       notes: d.notes || ''
     }]);
     if (error) return `❌ خطأ في الإضافة لسجل الحسابات: ${error.message}`;
