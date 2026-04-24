@@ -250,10 +250,18 @@ try {
   console.error('Error initializing Supabase:', e);
 }
 
-// إعداد الذكاء الاصطناعي Gemini
-// تم إضافة المفتاح الخاص بك هنا
-const geminiKey = process.env.GEMINI_API_KEY;
-const ai = new GoogleGenAI({ apiKey: geminiKey });
+// إعداد الذكاء الاصطناعي Gemini يتم عند الحاجة (Lazy Loading) لتجنب أخطاء بدء التشغيل
+let _aiClient: any = null;
+function getAiClient() {
+  if (!_aiClient) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      throw new Error('GEMINI_API_KEY is not set');
+    }
+    _aiClient = new GoogleGenAI({ apiKey: key });
+  }
+  return _aiClient;
+}
 
 // إعداد بوت التليكرام
 let token = process.env.TELEGRAM_BOT_TOKEN?.replace(/['"]/g, '');
@@ -421,6 +429,7 @@ function startTelegramBot() {
       رسالة المدير: ${text}
       `;
 
+      const ai = getAiClient();
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: context,
@@ -576,6 +585,7 @@ function startTelegramBot() {
       اكتب التقرير بشكل مرتب، واذكر إجمالي المبيعات (اجمع الأسعار)، وأهم الحركات. استخدم الإيموجي المناسبة.
       `;
 
+      const ai = getAiClient();
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: context,
