@@ -133,6 +133,31 @@ export default function Customers() {
       if (error) {
         console.error("Error updating:", error);
         alert(`حدث خطأ أثناء التعديل: ${error.message}`);
+      } else {
+         // Also update any related sales for this customer
+         if (editingCustomer.customer_code) {
+             const { error: salesError } = await supabase.from('sales')
+               .update({
+                  customerName: sanitizedName,
+                  customerUsername: sanitizedUsername
+               })
+               .eq('customerCode', editingCustomer.customer_code);
+               
+             if (salesError) {
+                 console.error("Error updating related sales:", salesError);
+             }
+
+             // Find related sales to update transactions
+             const { data: relatedSales } = await supabase.from('sales').select('id').eq('customerCode', editingCustomer.customer_code);
+             if (relatedSales && relatedSales.length > 0) {
+                 for (const sale of relatedSales) {
+                     await supabase.from('transactions').update({
+                         person: sanitizedName,
+                         username: sanitizedUsername || ''
+                     }).like('notes', `%[تلقائي] رقم المبيعة المرجعي: [${sale.id}]%`);
+                 }
+             }
+         }
       }
     } else {
       const { data: maxData } = await supabase

@@ -176,7 +176,7 @@ export default function Sales() {
       // A. Robust Search by Username
       if (finalCustomerUsername) {
          const { data } = await supabase.from('customers')
-           .select('id, purchases, customer_code')
+           .select('id, purchases, customer_code, name, username')
            .eq('username', finalCustomerUsername)
            .limit(1); 
          
@@ -186,7 +186,7 @@ export default function Sales() {
       // Fallback search by name
       if (!existingCustomer && finalCustomerName && !finalCustomerUsername) {
          const { data } = await supabase.from('customers')
-           .select('id, purchases, customer_code')
+           .select('id, purchases, customer_code, name, username')
            .ilike('name', finalCustomerName)
            .limit(1);
 
@@ -196,7 +196,7 @@ export default function Sales() {
       // Fallback search by existing customer code (useful during edit if name/username changed)
       if (!existingCustomer && finalCustomerCode) {
          const { data } = await supabase.from('customers')
-           .select('id, purchases, customer_code')
+           .select('id, purchases, customer_code, name, username')
            .eq('customer_code', finalCustomerCode)
            .limit(1);
 
