@@ -398,7 +398,28 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
     // Check or create customer
     let custCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.random().toString().substring(2, 5);
     let queryCust = supabase.from('customers').select('id, name, customer_code, customer_number').limit(1);
-    const { data: existingCust } = await (d.customerUsername ? queryCust.eq('username', d.customerUsername) : (d.customerName ? queryCust.ilike('name', d.customerName) : queryCust.eq('id', 'fail')));
+    
+    // Clean username if provided
+    let cleanUsername = d.customerUsername ? d.customerUsername.replace(/@/g, '').trim() : null;
+    let cleanName = d.customerName ? d.customerName.trim() : null;
+    
+    let existingCustQuery;
+    if (cleanUsername) {
+      existingCustQuery = await queryCust.ilike('username', `%${cleanUsername}%`);
+      if (!existingCustQuery.data || existingCustQuery.data.length === 0) {
+          // Fallback to name if username didn't match just in case
+          if (cleanName) {
+              const fallbackQuery = await supabase.from('customers').select('id, name, customer_code, customer_number').ilike('name', `%${cleanName}%`).limit(1);
+              existingCustQuery = fallbackQuery;
+          }
+      }
+    } else if (cleanName) {
+      existingCustQuery = await queryCust.ilike('name', `%${cleanName}%`);
+    } else {
+      existingCustQuery = await queryCust.eq('id', 'fail');
+    }
+    
+    const { data: existingCust } = existingCustQuery;
     
     let previousBuyerAlert = "";
 
