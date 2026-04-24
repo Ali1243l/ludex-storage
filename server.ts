@@ -227,7 +227,7 @@ app.get('/api/ip-logs', (req, res) => {
 
 // إعداد Supabase
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
 
 let supabase: any = null;
 try {
@@ -372,7 +372,12 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
       productName: d.productName || 'غير محدد', price, customerName: d.customerName || 'مجهول', customerUsername: d.customerUsername || null, customerCode: custCode, date: dateStr, notes: d.notes || ''
     }]).select();
 
-    if (saleError) return `❌ خطأ في البيعة: ${saleError.message}`;
+    if (saleError) {
+      if (saleError.message.includes('row-level security')) {
+        return `❌ ما صعدت البيعة للقاعدة لأن البوت ما عنده صلاحية (RLS).\n\nالحل: روح على إعدادات الـ Secrets وضيف مفتاح جديد اسمه:\nSUPABASE_SERVICE_ROLE_KEY\nتلكاه بلوحة تحكم Supabase بقسم API.`;
+      }
+      return `❌ خطأ في البيعة: ${saleError.message}`;
+    }
 
     const { error: transError } = await supabase.from('transactions').insert([{
       type: 'income', amount: price, date: dateStr, description: d.productName || 'مبيعة ذكية', person: d.customerName || 'مجهول', username: d.customerUsername || null, payment_method: d.paymentMethod || 'غير محدد', notes: `[تلقائي] رقم المبيعة: [${newSale[0]?.id}]`
@@ -602,6 +607,7 @@ async function startServer() {
   app.post("/api/chat-assistant", async (req, res) => {
     try {
       const { message } = req.body;
+      
       if (!message) return res.status(400).json({ error: "Message is required" });
       if (!supabase) return res.status(500).json({ error: "Supabase not connected" });
       
