@@ -381,13 +381,10 @@ function startTelegramBot() {
         throw new Error('Supabase is not initialized. Please check your environment variables.');
       }
       
-      // جلب ملخص من قاعدة البيانات حتى الذكاء الاصطناعي يجاوب بناءً عليها أو لتجنب التكرار
-      const [customers, sales, products, subscriptions, transactions] = await Promise.all([
+      // جلب ملخص من قاعدة البيانات المعنية فقط لتسريع الاستجابة
+      const [customers, products] = await Promise.all([
         supabase.from('customers').select('name, username, customer_number, notes').order('customer_number', { ascending: false }).limit(20),
-        supabase.from('sales').select('productName, price, date, customerName').order('date', { ascending: false }).limit(20),
-        supabase.from('products').select('name, sellingPrice, costPrice'),
-        supabase.from('subscriptions').select('name, category, expirationDate').order('expirationDate', { ascending: true }).limit(20),
-        supabase.from('transactions').select('type, amount, date, description').order('date', { ascending: false }).limit(20)
+        supabase.from('products').select('name, sellingPrice, costPrice')
       ]);
       
       const systemInstruction = `
@@ -438,7 +435,7 @@ function startTelegramBot() {
 
       const ai = getAiClient();
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash',
         contents: context,
         config: {
           systemInstruction: systemInstruction,
