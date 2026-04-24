@@ -252,7 +252,7 @@ try {
 
 // إعداد الذكاء الاصطناعي Gemini
 // تم إضافة المفتاح الخاص بك هنا
-const geminiKey = process.env.GEMINI_API_KEY?.startsWith('AIza') ? process.env.GEMINI_API_KEY : 'AIzaSyDjhHBm2SnBroJUR6sxHJ65ZDKyyjXiXaw';
+const geminiKey = process.env.GEMINI_API_KEY;
 const ai = new GoogleGenAI({ apiKey: geminiKey });
 
 // إعداد بوت التليكرام
