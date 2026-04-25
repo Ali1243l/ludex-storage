@@ -136,7 +136,7 @@ app.get('/api/sync-webhook', async (req, res) => {
   }
   try {
     const rawAppUrl = process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
-    const appUrl = rawAppUrl?.replace(/\/$/, '');
+    const appUrl = rawAppUrl?.replace(/\/$/, '')?.replace('/#', '')?.replace('#', '');
     if (!appUrl) return res.status(400).json({ error: 'APP_URL/VERCEL_URL not found' });
     
     // We recreate bot here just in case it wasn't initialized
@@ -676,7 +676,7 @@ function startTelegramBot() {
   }
 
   const rawAppUrl = process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
-  const appUrl = rawAppUrl?.replace(/\/$/, ''); // Remove trailing slash if any
+  const appUrl = rawAppUrl?.replace(/\/$/, '')?.replace('/#', '')?.replace('#', ''); // Remove trailing slash if any
   const isDev = !process.env.VERCEL && (appUrl?.includes('ais-dev') || appUrl?.includes('localhost') || !appUrl);
 
   if (!isDev && appUrl) {
