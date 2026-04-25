@@ -453,7 +453,9 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
   
   if (!response) throw new Error("Failed to generate content.");
 
-  const parsed = JSON.parse(response.text || "{}");
+  let textT = typeof response.text === 'function' ? response.text() : response.text;
+  console.log("Raw LLM response:", textT);
+  const parsed = JSON.parse(textT || "{}");
   const dateStr = baghdadTime.toISOString().split('T')[0];
   const nowStr = new Date().toISOString(); 
 
@@ -679,19 +681,18 @@ function startTelegramBot() {
   const appUrl = rawAppUrl?.replace(/\/$/, '')?.replace('/#', '')?.replace('#', ''); // Remove trailing slash if any
   const isDev = !process.env.VERCEL && (appUrl?.includes('ais-dev') || appUrl?.includes('localhost') || !appUrl);
 
-  if (!isDev && appUrl) {
-    // استخدام Webhook في بيئة الاستضافة (Vercel وغيرها)
+  if (process.env.VERCEL) {
+    // استخدام Webhook في بيئة الاستضافة (Vercel)
     bot = new TelegramBot(token);
   } else {
-    // إيقاف البوت في بيئة التطوير لتجنب مسح Webhook الخاص بـ Vercel
-    console.log('Bot is disabled in development mode to prevent conflicts with Vercel Webhook.');
-    bot = null;
-    return;
+    // تفعيل الـ Polling في بيئة التطوير
+    console.log('Bot is running in Polling mode for Development.');
+    bot = new TelegramBot(token, { polling: true });
   }
 
   const processedMessages = new Set<number>();
 
-    if (bot && !process.env.VERCEL) {
+  if (bot) {
     bot.on('message', handleTelegramMessage);
   }
 
