@@ -130,12 +130,38 @@ app.post('/api/fetch-price', async (req, res) => {
 });
 
 // نقطة نهاية لاستقبال تحديثات تليكرام (Webhook)
+app.get('/api/sync-webhook', async (req, res) => {
+  if (!bot && !token) {
+    return res.status(400).json({ error: 'Bot token not configured' });
+  }
+  try {
+    const rawAppUrl = process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+    const appUrl = rawAppUrl?.replace(/\/$/, '');
+    if (!appUrl) return res.status(400).json({ error: 'APP_URL/VERCEL_URL not found' });
+    
+    // We recreate bot here just in case it wasn't initialized
+    const tempBot = bot || new TelegramBot(token!);
+    const webhookUrl = `${appUrl}/api/telegram-webhook`;
+    await tempBot.setWebHook(webhookUrl);
+    console.log(`Manual webhook sync to: ${webhookUrl}`);
+    res.json({ success: true, url: webhookUrl });
+  } catch (error: any) {
+    console.error('Webhook sync failed:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/telegram-webhook', (req, res) => {
   console.log('Received Telegram webhook:', JSON.stringify(req.body));
+  if (!bot) {
+    console.log('Bot instance is not initialized. Initializing now...');
+    startTelegramBot();
+  }
+  
   if (bot) {
     bot.processUpdate(req.body);
   } else {
-    console.log('Bot instance is not initialized when receiving webhook.');
+    console.log('Failed to initialize bot for webhook.');
   }
   res.sendStatus(200);
 });
