@@ -1,0 +1,1 @@
+import { createClient } from '@supabase/supabase-js'; import dotenv from 'dotenv'; dotenv.config(); const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.VITE_SUPABASE_ANON_KEY!); async function run() { const { data } = await supabase.from('sales').select('*').eq('customerCode', 'CFZD1954'); console.log('Total sales for CFZD1954:', data?.length); } run();

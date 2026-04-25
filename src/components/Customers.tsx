@@ -794,7 +794,7 @@ export default function Customers() {
                     <div className="bg-gray-50/50 dark:bg-slate-700/30 p-4 rounded-xl border border-gray-100 dark:border-slate-600 max-h-60 overflow-y-auto">
                        <ul className="divide-y divide-gray-200 dark:divide-slate-600/50">
                           {(editingCustomer as any).purchaseHistory.map((purchase: any, idx: number) => (
-                             <li key={purchase.id || idx} className="py-3 flex justify-between items-center text-sm">
+                            <li key={purchase.id || idx} className="py-3 flex justify-between items-center text-sm group">
                                <div className="flex flex-col">
                                  <span className="font-medium text-gray-900 dark:text-white">
                                     {purchase.productName || 'منتج غير معروف'}
@@ -803,8 +803,47 @@ export default function Customers() {
                                     {purchase.date ? new Date(purchase.date).toLocaleDateString('ar-IQ') : '-'}
                                  </span>
                                </div>
-                               <div className="text-emerald-600 dark:text-emerald-400 font-semibold text-right flex flex-col items-end">
-                                 {purchase.price ? purchase.price.toLocaleString('en-US') + ' د.ع' : '-'}
+                               <div className="flex items-center gap-3">
+                                 <div className="text-emerald-600 dark:text-emerald-400 font-semibold text-right flex flex-col items-end">
+                                   {purchase.price ? purchase.price.toLocaleString('en-US') + ' د.ع' : '-'}
+                                 </div>
+                                 {role === 'admin' && (
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        if (window.confirm('هل أنت متأكد من حذف هذه المبيعة؟')) {
+                                          if (purchase.id) {
+                                            await supabase.from('transactions').delete().or(`notes.ilike.%[تلقائي] رقم المبيعة المرجعي: [${purchase.id}]%,notes.ilike.%[تلقائي] رقم المبيعة: [${purchase.id}]%`);
+                                            await supabase.from('sales').delete().eq('id', purchase.id);
+                                            
+                                            // Handle customer cleanup
+                                            if (purchase.customerCode) {
+                                                const { data: c } = await supabase.from('customers').select('total_spent').eq('customer_code', purchase.customerCode).single();
+                                                if (c && c.total_spent !== undefined) {
+                                                    await supabase.from('customers').update({ total_spent: Math.max(0, (Number(c.total_spent) || 0) - (Number(purchase.price) || 0)) }).eq('customer_code', purchase.customerCode);
+                                                }
+                                            } else if (purchase.customerName) {
+                                                const { data: c } = await supabase.from('customers').select('total_spent').eq('name', purchase.customerName).single();
+                                                if (c && c.total_spent !== undefined) {
+                                                    await supabase.from('customers').update({ total_spent: Math.max(0, (Number(c.total_spent) || 0) - (Number(purchase.price) || 0)) }).eq('name', purchase.customerName);
+                                                }
+                                            }
+
+                                            // Update local modal state immediately
+                                            setEditingCustomer(prev => {
+                                              if (!prev) return prev;
+                                              const newHistory = (prev as any).purchaseHistory.filter((p: any) => p.id !== purchase.id);
+                                              return { ...prev, purchaseHistory: newHistory };
+                                            });
+                                          }
+                                        }
+                                      }}
+                                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                                      title="حذف المبيعة"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                 )}
                                </div>
                              </li>
                           ))}

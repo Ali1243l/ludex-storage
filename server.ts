@@ -413,9 +413,9 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
         let cUser = typeof c.username === 'string' ? c.username.toLowerCase() : (c.username ? JSON.stringify(c.username).toLowerCase() : '');
         
         let matched = false;
-        if (cleanUsername && cUser.includes(cleanUsername)) {
+        if (cleanUsername && cUser === cleanUsername) {
           matched = true;
-        } else if (cleanName && cName.includes(cleanName)) {
+        } else if (cleanName && cName === cleanName) {
           matched = true;
         }
         
