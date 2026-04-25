@@ -817,24 +817,42 @@ export default function Customers() {
                                             await supabase.from('sales').delete().eq('id', purchase.id);
                                             
                                             // Handle customer cleanup
+                                            let lastSale = false;
                                             if (purchase.customerCode) {
-                                                const { data: c } = await supabase.from('customers').select('total_spent').eq('customer_code', purchase.customerCode).single();
-                                                if (c && c.total_spent !== undefined) {
-                                                    await supabase.from('customers').update({ total_spent: Math.max(0, (Number(c.total_spent) || 0) - (Number(purchase.price) || 0)) }).eq('customer_code', purchase.customerCode);
+                                                const { data: otherSales } = await supabase.from('sales').select('id').eq('customerCode', purchase.customerCode).limit(1);
+                                                if (!otherSales || otherSales.length === 0) {
+                                                    lastSale = true;
+                                                    await supabase.from('customers').delete().eq('customer_code', purchase.customerCode);
+                                                } else {
+                                                    const { data: c } = await supabase.from('customers').select('total_spent').eq('customer_code', purchase.customerCode).single();
+                                                    if (c && c.total_spent !== undefined) {
+                                                        await supabase.from('customers').update({ total_spent: Math.max(0, (Number(c.total_spent) || 0) - (Number(purchase.price) || 0)) }).eq('customer_code', purchase.customerCode);
+                                                    }
                                                 }
                                             } else if (purchase.customerName) {
-                                                const { data: c } = await supabase.from('customers').select('total_spent').eq('name', purchase.customerName).single();
-                                                if (c && c.total_spent !== undefined) {
-                                                    await supabase.from('customers').update({ total_spent: Math.max(0, (Number(c.total_spent) || 0) - (Number(purchase.price) || 0)) }).eq('name', purchase.customerName);
+                                                const { data: otherSales } = await supabase.from('sales').select('id').eq('customerName', purchase.customerName).limit(1);
+                                                if (!otherSales || otherSales.length === 0) {
+                                                    lastSale = true;
+                                                    await supabase.from('customers').delete().eq('name', purchase.customerName);
+                                                } else {
+                                                    const { data: c } = await supabase.from('customers').select('total_spent').eq('name', purchase.customerName).single();
+                                                    if (c && c.total_spent !== undefined) {
+                                                        await supabase.from('customers').update({ total_spent: Math.max(0, (Number(c.total_spent) || 0) - (Number(purchase.price) || 0)) }).eq('name', purchase.customerName);
+                                                    }
                                                 }
                                             }
-
-                                            // Update local modal state immediately
-                                            setEditingCustomer(prev => {
-                                              if (!prev) return prev;
-                                              const newHistory = (prev as any).purchaseHistory.filter((p: any) => p.id !== purchase.id);
-                                              return { ...prev, purchaseHistory: newHistory };
-                                            });
+                                            
+                                            if (lastSale) {
+                                                setIsModalOpen(false);
+                                                setEditingCustomer(null);
+                                            } else {
+                                              // Update local modal state immediately
+                                              setEditingCustomer(prev => {
+                                                if (!prev) return prev;
+                                                const newHistory = (prev as any).purchaseHistory.filter((p: any) => p.id !== purchase.id);
+                                                return { ...prev, purchaseHistory: newHistory };
+                                              });
+                                            }
                                           }
                                         }
                                       }}
