@@ -151,18 +151,19 @@ app.get('/api/sync-webhook', async (req, res) => {
   }
 });
 
-app.post('/api/telegram-webhook', (req, res) => {
+app.post('/api/telegram-webhook', async (req, res) => {
   console.log('Received Telegram webhook:', JSON.stringify(req.body));
   if (!bot) {
     console.log('Bot instance is not initialized. Initializing now...');
-    startTelegramBot();
+    startTelegramBot(); // still need this to init bot and cron
   }
   
-  if (bot) {
-    bot.processUpdate(req.body);
-  } else {
-    console.log('Failed to initialize bot for webhook.');
+  if (req.body && req.body.message) {
+    await handleTelegramMessage(req.body.message);
+  } else if (bot) {
+    bot.processUpdate(req.body); // fallback for inline actions etc, fire and forget
   }
+  
   res.sendStatus(200);
 });
 
@@ -679,16 +680,6 @@ function startTelegramBot() {
   if (!isDev && appUrl) {
     // استخدام Webhook في بيئة الاستضافة (Vercel وغيرها)
     bot = new TelegramBot(token);
-    const webhookUrl = `${appUrl}/api/telegram-webhook`;
-    bot.getWebHookInfo().then(info => {
-      if (info.url !== webhookUrl) {
-        bot!.setWebHook(webhookUrl).then(() => {
-          console.log(`Telegram webhook set to ${webhookUrl}`);
-        }).catch(err => {
-          console.error('Failed to set Telegram webhook:', err);
-        });
-      }
-    });
   } else {
     // إيقاف البوت في بيئة التطوير لتجنب مسح Webhook الخاص بـ Vercel
     console.log('Bot is disabled in development mode to prevent conflicts with Vercel Webhook.');
@@ -698,7 +689,95 @@ function startTelegramBot() {
 
   const processedMessages = new Set<number>();
 
-  bot.on('message', async (msg) => {
+    if (bot && !process.env.VERCEL) {
+    bot.on('message', handleTelegramMessage);
+  }
+
+  // إعداد التقرير اليومي التلقائي الساعة 12 منتصف الليل بتوقيت بغداد
+  cron.schedule('0 0 * * *', async () => {
+    if (activeChatIds.size === 0 || !bot) return;
+
+    try {
+      if (!supabase) {
+        console.log('Supabase is not initialized. Skipping daily report.');
+        return;
+      }
+
+      console.log('Generating daily report...');
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString();
+
+      // جلب البيانات الجديدة في آخر 24 ساعة
+      const [newSales, newTransactions, newCustomers] = await Promise.all([
+        supabase.from('sales').select('productName, price, date, customerName').gte('date', yesterdayStr),
+        supabase.from('transactions').select('type, amount, date, description').gte('date', yesterdayStr),
+        // قد لا يحتوي جدول الزبائن على created_at، لذلك نتجاهل الخطأ إذا حدث
+        supabase.from('customers').select('name, username, customer_number').gte('created_at', yesterdayStr).catch(() => ({ data: [] }))
+      ]);
+
+      const salesData = newSales.data || [];
+      const transData = newTransactions.data || [];
+      const custData = newCustomers.data || [];
+
+      // إذا لم تكن هناك أي تغييرات، لا نرسل التقرير
+      if (salesData.length === 0 && transData.length === 0 && custData.length === 0) {
+        console.log('No changes in the last 24 hours. Skipping report.');
+        return;
+      }
+
+      const context = `
+      أنت مساعد ذكي لمتجر Ludex Store.
+      قم بكتابة تقرير يومي مفصل لصاحب المتجر عن التغييرات التي حدثت في آخر 24 ساعة.
+      تحدث بلهجة عراقية محترمة وودودة.
+      
+      البيانات الجديدة في آخر 24 ساعة:
+      - المبيعات الجديدة (${salesData.length} مبيعات): ${JSON.stringify(salesData)}
+      - المعاملات المالية (${transData.length} معاملات): ${JSON.stringify(transData)}
+      - الزبائن الجدد (${custData.length} زبائن): ${JSON.stringify(custData)}
+      
+      اكتب التقرير بشكل مرتب، واذكر إجمالي المبيعات (اجمع الأسعار)، وأهم الحركات. استخدم الإيموجي المناسبة.
+      `;
+
+      const modelsToTry = getModelsToTry();
+      let response;
+      const ai = getAiClient();
+
+      for (let i = 0; i < modelsToTry.length; i++) {
+        try {
+          response = await ai.models.generateContent({
+            model: modelsToTry[i],
+            contents: context,
+            config: {
+              systemInstruction: "أنت مساعد ذكي لمتجر Ludex Store. اكتب تقريراً يومياً بلهجة عراقية بناءً على البيانات.",
+            }
+          });
+          break; // Success
+        } catch (err: any) {
+          if (i === modelsToTry.length - 1) throw err;
+          console.warn(`Model ${modelsToTry[i]} failed for daily report, trying next... Error: ${err.message}`);
+        }
+      }
+
+      const reportText = response?.text || 'عذراً، لم أتمكن من توليد التقرير اليومي.';
+
+      for (const chatId of activeChatIds) {
+        bot.sendMessage(chatId, `📊 **التقرير اليومي التلقائي** 📊\n\n${reportText}`, { parse_mode: 'Markdown' });
+      }
+    } catch (error) {
+      console.error('Error generating daily report:', error);
+    }
+  }, {
+    timezone: "Asia/Baghdad"
+  });
+
+  console.log('Telegram bot started successfully!');
+} // قفل دالة startTelegramBot
+
+const processedMessages = new Set<number>();
+
+export async function handleTelegramMessage(msg: any) {
+    if (!bot) return;
     const chatId = msg.chat.id;
     const isPrivate = msg.chat.type === 'private';
     const BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || '@your_bot_username';
@@ -796,88 +875,7 @@ function startTelegramBot() {
         bot?.sendMessage(chatId, `عذراً، صار خطأ أثناء معالجة طلبك.\n\nتفاصيل الخطأ للمطور:\n${error.message || 'خطأ غير معروف'}`);
       }
     }
-  });
-
-  // إعداد التقرير اليومي التلقائي الساعة 12 منتصف الليل بتوقيت بغداد
-  cron.schedule('0 0 * * *', async () => {
-    if (activeChatIds.size === 0 || !bot) return;
-
-    try {
-      if (!supabase) {
-        console.log('Supabase is not initialized. Skipping daily report.');
-        return;
-      }
-
-      console.log('Generating daily report...');
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString();
-
-      // جلب البيانات الجديدة في آخر 24 ساعة
-      const [newSales, newTransactions, newCustomers] = await Promise.all([
-        supabase.from('sales').select('productName, price, date, customerName').gte('date', yesterdayStr),
-        supabase.from('transactions').select('type, amount, date, description').gte('date', yesterdayStr),
-        // قد لا يحتوي جدول الزبائن على created_at، لذلك نتجاهل الخطأ إذا حدث
-        supabase.from('customers').select('name, username, customer_number').gte('created_at', yesterdayStr).catch(() => ({ data: [] }))
-      ]);
-
-      const salesData = newSales.data || [];
-      const transData = newTransactions.data || [];
-      const custData = newCustomers.data || [];
-
-      // إذا لم تكن هناك أي تغييرات، لا نرسل التقرير
-      if (salesData.length === 0 && transData.length === 0 && custData.length === 0) {
-        console.log('No changes in the last 24 hours. Skipping report.');
-        return;
-      }
-
-      const context = `
-      أنت مساعد ذكي لمتجر Ludex Store.
-      قم بكتابة تقرير يومي مفصل لصاحب المتجر عن التغييرات التي حدثت في آخر 24 ساعة.
-      تحدث بلهجة عراقية محترمة وودودة.
-      
-      البيانات الجديدة في آخر 24 ساعة:
-      - المبيعات الجديدة (${salesData.length} مبيعات): ${JSON.stringify(salesData)}
-      - المعاملات المالية (${transData.length} معاملات): ${JSON.stringify(transData)}
-      - الزبائن الجدد (${custData.length} زبائن): ${JSON.stringify(custData)}
-      
-      اكتب التقرير بشكل مرتب، واذكر إجمالي المبيعات (اجمع الأسعار)، وأهم الحركات. استخدم الإيموجي المناسبة.
-      `;
-
-      const modelsToTry = getModelsToTry();
-      let response;
-      const ai = getAiClient();
-
-      for (let i = 0; i < modelsToTry.length; i++) {
-        try {
-          response = await ai.models.generateContent({
-            model: modelsToTry[i],
-            contents: context,
-            config: {
-              systemInstruction: "أنت مساعد ذكي لمتجر Ludex Store. اكتب تقريراً يومياً بلهجة عراقية بناءً على البيانات.",
-            }
-          });
-          break; // Success
-        } catch (err: any) {
-          if (i === modelsToTry.length - 1) throw err;
-          console.warn(`Model ${modelsToTry[i]} failed for daily report, trying next... Error: ${err.message}`);
-        }
-      }
-
-      const reportText = response?.text || 'عذراً، لم أتمكن من توليد التقرير اليومي.';
-
-      for (const chatId of activeChatIds) {
-        bot.sendMessage(chatId, `📊 **التقرير اليومي التلقائي** 📊\n\n${reportText}`, { parse_mode: 'Markdown' });
-      }
-    } catch (error) {
-      console.error('Error generating daily report:', error);
-    }
-  }, {
-    timezone: "Asia/Baghdad"
-  });
-
-  console.log('Telegram bot started successfully!');
-}
+  }
 
 async function startServer() {
   // API routes FIRST
