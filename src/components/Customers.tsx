@@ -303,7 +303,7 @@ export default function Customers() {
            ...customer,
            derivedPurchaseCount: purchaseCount,
            derivedLastPurchase: lastPurchaseDate,
-           totalSpent: customer.total_spent != null ? Number(customer.total_spent) : totalSpent,
+           totalSpent: purchaseCount > 0 ? totalSpent : (customer.total_spent != null ? Number(customer.total_spent) : 0),
            purchaseHistory: purchaseHistory, // Add to customer object
         };
      });
