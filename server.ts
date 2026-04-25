@@ -412,6 +412,12 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
     "update_data": {} // الحقول المراد تحديثها في حال التعديل
   }
 
+  إذا كانت الرسالة طلب ملخص (ملخص يومي، شهري، أو جرد للمبيعات والمصاريف):
+  {
+    "action": "reply",
+    "message": "ضع هنا ملخص شامل بلهجة عراقية مهنية استناداً للبيانات المرفقة (المبيعات، المصاريف). اذكر مجاميع المبالغ وتفاصيل سريعة."
+  }
+
   إذا كانت الرسالة استفسار أو سؤال عام:
   {
     "action": "reply",
@@ -688,6 +694,15 @@ function startTelegramBot() {
     // تفعيل الـ Polling في بيئة التطوير
     console.log('Bot is running in Polling mode for Development.');
     bot = new TelegramBot(token, { polling: true });
+    
+    bot.on('polling_error', (error: any) => {
+      if (error.code === 'ETELEGRAM' && error.message.includes('409 Conflict')) {
+        console.log('Another instance is polling. Stopping polling on this instance to avoid 409 Conflict.');
+        if (bot) bot.stopPolling();
+      } else {
+        console.log('Polling error:', error.message);
+      }
+    });
   }
 
   const processedMessages = new Set<number>();
