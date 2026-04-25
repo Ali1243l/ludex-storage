@@ -648,40 +648,26 @@ function startTelegramBot() {
 
   const rawAppUrl = process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
   const appUrl = rawAppUrl?.replace(/\/$/, ''); // Remove trailing slash if any
-  const isDev = appUrl?.includes('ais-dev') || appUrl?.includes('localhost');
+  const isDev = !process.env.VERCEL && (appUrl?.includes('ais-dev') || appUrl?.includes('localhost') || !appUrl);
 
-  if (appUrl && !isDev) {
+  if (!isDev && appUrl) {
     // استخدام Webhook في بيئة الاستضافة (Vercel وغيرها)
     bot = new TelegramBot(token);
     const webhookUrl = `${appUrl}/api/telegram-webhook`;
-    bot.setWebHook(webhookUrl).then(() => {
-      console.log(`Telegram webhook set to ${webhookUrl}`);
-    }).catch(err => {
-      console.error('Failed to set Telegram webhook:', err);
+    bot.getWebHookInfo().then(info => {
+      if (info.url !== webhookUrl) {
+        bot!.setWebHook(webhookUrl).then(() => {
+          console.log(`Telegram webhook set to ${webhookUrl}`);
+        }).catch(err => {
+          console.error('Failed to set Telegram webhook:', err);
+        });
+      }
     });
   } else {
-    // استخدام Polling في بيئة التطوير المحلية
-    bot = new TelegramBot(token, { 
-      polling: {
-        interval: 300,
-        autoStart: true,
-        params: { timeout: 50 }
-      }
-    });
-
-    bot.on('polling_error', (error: any) => {
-      // تجاهل أخطاء 429 و 502 لأن المكتبة ستقوم بإعادة المحاولة تلقائياً
-      if (error.message.includes('429') || error.message.includes('502')) {
-        console.log(`Telegram API warning: ${error.message} - Auto-retrying...`);
-        return;
-      }
-      if (error.message.includes('409')) {
-        console.warn('Telegram Bot Warning: 409 Conflict. Another instance (likely production) is running. Polling paused.');
-        bot?.stopPolling();
-        return;
-      }
-      console.error('Telegram Bot Polling Error:', error.message);
-    });
+    // إيقاف البوت في بيئة التطوير لتجنب مسح Webhook الخاص بـ Vercel
+    console.log('Bot is disabled in development mode to prevent conflicts with Vercel Webhook.');
+    bot = null;
+    return;
   }
 
   const processedMessages = new Set<number>();
@@ -947,12 +933,9 @@ async function startServer() {
       try {
         const appUrl = process.env.APP_URL;
         const isDev = appUrl?.includes('ais-dev');
-        if (appUrl && !isDev) {
-          await bot.deleteWebHook();
-          console.log('Telegram webhook deleted.');
-        } else {
-          await bot.stopPolling();
-          console.log('Telegram bot polling stopped.');
+        if (!process.env.VERCEL) {
+           await bot.stopPolling().catch(() => {});
+           console.log('Telegram bot polling stopped (if active).');
         }
       } catch (e) {
         console.error('Error stopping bot:', e);
