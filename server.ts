@@ -282,11 +282,11 @@ try {
 
 // إعداد الذكاء الاصطناعي Gemini يتم عند الحاجة (Lazy Loading) لتجنب أخطاء بدء التشغيل
 let _aiClient: any = null;
-export let _aiKeyMode: 'gemini' | 'groq' = 'gemini';
+export let _aiKeyMode: 'gemini' | 'groq' | 'nvidia' = 'gemini';
 
 function getAiClient() {
   if (!_aiClient) {
-    let key = process.env.CUSTOM_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || '';
+    let key = process.env.CUSTOM_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || process.env.NVIDIA_API_KEY || '';
     key = key.replace(/['"]/g, '').trim();
     if (!key) {
       throw new Error('GEMINI_API_KEY is not set');
@@ -317,6 +317,42 @@ function getAiClient() {
           }
         }
       };
+    } else if (key.startsWith('nvapi-')) {
+      _aiKeyMode = 'nvidia';
+      _aiClient = {
+        models: {
+          generateContent: async (opts: any) => {
+            const systemInst = opts.config?.systemInstruction || "";
+            const messages = [];
+            if (systemInst) messages.push({ role: 'system', content: systemInst });
+            messages.push({ role: 'user', content: opts.contents });
+            
+            const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key}`
+              },
+              body: JSON.stringify({
+                model: opts.model,
+                messages: messages,
+                response_format: opts.config?.responseMimeType === "application/json" ? { type: "json_object" } : undefined
+              })
+            });
+            
+            if (!res.ok) {
+              const body = await res.text();
+              throw new Error(`Nvidia API error: ${res.status} ${body}`);
+            }
+            
+            const completion = await res.json();
+            return { text: completion.choices[0]?.message?.content || "" };
+          },
+          list: async () => {
+             return [{ name: 'meta/llama-3.1-70b-instruct' }, { name: 'meta/llama-3.1-8b-instruct' }];
+          }
+        }
+      };
     } else {
       _aiKeyMode = 'gemini';
       if (!key.startsWith('AIza')) {
@@ -332,6 +368,9 @@ export function getModelsToTry() {
   if (!_aiClient) getAiClient();
   if (_aiKeyMode === 'groq') {
     return ['llama-3.3-70b-versatile', 'llama3-70b-8192', 'llama-3.1-8b-instant', 'llama3-8b-8192'];
+  }
+  if (_aiKeyMode === 'nvidia') {
+    return ['meta/llama-3.1-70b-instruct', 'meta/llama-3.1-8b-instruct'];
   }
   return ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
 }
@@ -352,76 +391,73 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
   }
 
   // جلب ملخص من قاعدة البيانات لتوفير سياق
-  const [customers, products, sales, transactions] = await Promise.all([
+  const [customers, products, sales, transactions, subscriptions] = await Promise.all([
     supabase.from('customers').select('name, username, customer_number').order('customer_number', { ascending: false }).limit(5),
     supabase.from('products').select('name, sellingPrice, costPrice'),
-    supabase.from('sales').select('id, productName, price, date, customerName').order('date', { ascending: false }).limit(20),
-    supabase.from('transactions').select('id, type, amount, date, description, person').order('date', { ascending: false }).limit(20)
+    supabase.from('sales').select('id, productName, price, date, customerName, notes').order('date', { ascending: false }).limit(20),
+    supabase.from('transactions').select('id, type, amount, date, description, person').order('date', { ascending: false }).limit(20),
+    supabase.from('subscriptions').select('id, name, category, account_username, account_password, notes').order('id', { ascending: false }).limit(20).then((res: any) => res).catch(() => ({ data: [] }))
   ]);
   
   const systemInstruction = `
-  أنت مدير قواعد بيانات ومساعد ذكي لمتجر Ludex Store. 
-  مهمتك قراءة رسالة مدير المتجر وتحديد الإجراء المطلوب بدقة.
-  لا تفترض القائمة، اقرأ بذكاء:
-  - إذا قال "سجل مبيعة" أو "بعت" -> القائمة سجل البيع (sales).
-  - إذا قال "مصروف" أو "صرفنا" أو "سجل بالمالية" -> القائمة المالية لسجل المصاريف (transactions).
-  - إذا قال "سجل حساب" أو "اشتراك جديد" أو "بسجل الحسابات" -> قائمة سجل الحسابات (subscriptions).
+  أنت مساعد ذكي ومدير مبيعات لمتجر Ludex Store وتتحدث باللهجة العراقية اللطيفة والمحترمة (بدون تكلف).
+  مهمتك قراءة رسالة مدير المتجر وتحديد الإجراء المطلوب بدقة واحترافية.
+  لا تفترض القائمة أو تخمن، اقرأ السياق بذكاء:
+  - إذا قال "سجل مبيعة" أو ذكر اسم منتج مباع ومشتري وسعر -> القائمة "سجل البيع" (sales).
+  - إذا قال "صرفنا" أو "مصروف" أو "تسديد دين" أو أموال واردة غير المبيعات -> القائمة "سجل المالية" (transactions).
+  - إذا قال "اشتراك جديد" أو عطى يوزر وباسورد أو سأل عن حساب -> "سجل الحسابات" (subscriptions).
   
-  يجب أن يكون ردك دائماً بصيغة JSON صحيحة وفق الهيكل التالي:
+  دائماً أرجع الرد بصيغة JSON حصراً بدون أي نصوص قبلها أو بعدها، التزم بـ JSON فقط:
   
-  إذا كانت الرسالة لحفظ مبيعة (سجل البيع):
+  لإضافة مبيعة (سجل البيع):
   {
     "action": "insert_sale",
     "sale_data": {
-      "customerName": "اسم الزبون", "customerUsername": "يوزر الزبون (بدون @)", "productName": "المنتج", "price": السعر رقماً, "paymentMethod": "طريقة الدفع", "notes": "ملاحظات"
+      "customerName": "اسم الزبون", "customerUsername": "يوزر الزبون (بدون @)", "productName": "المنتج", "price": السعر رقماً, "paymentMethod": "طريقة الدفع", "notes": "ملاحظات إضافية فقط"
     },
-    "message": "رسالة تأكيد مختصرة"
+    "message": "رسالة تأكيد بشوشة باللهجة العراقية"
   }
 
-  إذا كانت الرسالة لحفظ مصروف أو إيراد مالي مباشر (المالية):
+  لإضافة مصروف أو إيراد (سجل المالية):
   {
     "action": "insert_transaction",
     "transaction_data": {
-      "type": "expense" (إذا صرف) أو "income" (إذا وارد),
-      "description": "الوصف", "amount": التكلفة رقماً, "person": "الجهة أو الشخص", "notes": "ملاحظات"
+      "type": "expense" (اختاره للمصروف) أو "income" (اختاره للوارد),
+      "description": "تفاصيل المعاملة", "amount": المبلغ رقماً, "person": "الجهة المستلمة/الدافعة", "notes": "ملاحظات"
     },
-    "message": "رسالة تأكيد مختصرة"
+    "message": "رسالة تأكيد مهنية باللهجة العراقية"
   }
 
-  إذا كانت الرسالة لحفظ حساب أو اشتراك جديد (سجل الحسابات):
+  لإضافة حساب/اشتراك (سجل الحسابات):
   {
     "action": "insert_subscription",
     "subscription_data": {
-      "name": "اسم الحساب أو الاشتراك",
-      "category": "تصنيف (مثلاً مشاهدة، العاب، عام)",
-      "activationDate": "تاريخ التفعيل YYYY-MM-DD",
-      "expirationDate": "تاريخ الانتهاء YYYY-MM-DD",
-      "account_username": "الايميل أو يوزر الحساب (إن وجد)",
-      "account_password": "رمز الحساب أو الباسورد (إن وجد)",
-      "notes": "ملاحظات إضافية فقط (لا تضع الباسورد أو اليوزر هنا)"
+      "name": "اسم الاشتراك/الحساب (كيم باس، نتفلكس، الخ)",
+      "category": "اختصاصه (العاب، بث، عام)",
+      "activationDate": "تاريخ التفعيل (YYYY-MM-DD)",
+      "expirationDate": "تاريخ الانتهاء المرجح (YYYY-MM-DD)",
+      "account_username": "الايميل/اليوزر",
+      "account_password": "الباسورد",
+      "notes": "المدة أو ملاحظات أخرى"
     },
-    "message": "رسالة تأكيد مختصرة"
+    "message": "تأكيد لطيف بإضافة الاشتراك"
   }
 
-  إذا كانت الرسالة لحذف أو تعديل أي شيء:
+  لتعديل أو حذف (modify_record):
   {
     "action": "modify_record",
-    "operation": "delete" أو "update",
+    "operation": "delete" للحذف أو "update" للتعديل,
     "table": "sales" أو "transactions" أو "subscriptions",
-    "target_id": "رقم الـ id للسجل المطلوب (أبحَث عنه في البيانات المرفقة)",
-    "update_data": {} // الحقول المراد تحديثها في حال التعديل
+    "target_id": "رقم الـ id الدقيق من البيانات المرفقة - ابحث بذكاء عن السجل المقصود ولا تضع نصاً وهمياً",
+    "update_data": {} // الحقول والقيم الجديدة للتعديل فقط بالصيغة الصحيحة. مثلاً إذا طلب دمج ملاحظة، ادمجها مع الملاحظة المرفقة ببيانات هذا ID وضع النتيجة هنا. 
   }
+  ملاحظة هامة جداً: إذا طلب المدير تعديلاً (مثلاً "خلي الملاحظة انباع سويج") يجب أن تقرأ السجل الموجود ضمن "البيانات الحالية" وتعرف محتواه وتصنع "update_data" متكامل. 
+  إذا لم تتمكن من استنتاج الـ id الدقيق للسجل من البيانات المرفقة أو سياق الرد، لا تخمن ID أبداً، بل اختر "reply" واطلب منه توضيح أو تحديد السجل بريبلاي.
 
-  إذا كانت الرسالة طلب ملخص (ملخص يومي، شهري، أو جرد للمبيعات والمصاريف):
+  للإجابة عن أسئلة أو تلخيص (reply):
   {
     "action": "reply",
-    "message": "ضع هنا ملخص شامل بلهجة عراقية مهنية استناداً للبيانات المرفقة (المبيعات، المصاريف). اذكر مجاميع المبالغ وتفاصيل سريعة."
-  }
-
-  إذا كانت الرسالة استفسار أو سؤال عام:
-  {
-    "action": "reply",
-    "message": "الإجابة السريعة المباشرة بلهجة عراقية بناءً على البيانات."
+    "message": "ردك الذكي والمنسق بشكل مرتب جداً باستخدام الماركداون (نقاط، خطوط عريضة، جداول بسيطة) وبلهجة عراقية محترفة بناءً على الأرقام والبيانات المتوفرة."
   }
   `;
 
@@ -432,6 +468,7 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
   - معلومات المنتجات: ${JSON.stringify(products.data)}
   - أحدث 20 عملية بيع (للعثور على id): ${JSON.stringify(sales.data)}
   - أحدث 20 مصروف/إيراد: ${JSON.stringify(transactions.data)}
+  - أحدث 20 حساب/اشتراك: ${JSON.stringify(subscriptions.data)}
   
   رسالة المدير: ${text}
   `;
@@ -461,7 +498,19 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
 
   let textT = typeof response.text === 'function' ? response.text() : response.text;
   console.log("Raw LLM response:", textT);
-  const parsed = JSON.parse(textT || "{}");
+  
+  if (textT) {
+    textT = textT.replace(/```json\n?/ig, '').replace(/```\n?/g, '').trim();
+  }
+
+  let parsed = {};
+  try {
+    parsed = JSON.parse(textT || "{}");
+  } catch (err) {
+    console.error("Failed to parse LLM JSON response:", err);
+    parsed = { action: 'reply', message: textT };
+  }
+
   const dateStr = baghdadTime.toISOString().split('T')[0];
   const nowStr = new Date().toISOString(); 
 
@@ -602,6 +651,14 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
     return `✅ تم تسجيل الحساب / الاشتراك بنجاح في سجل الحسابات!\n\n` + (parsed.message || '');
   }
   else if (parsed.action === 'modify_record' && parsed.target_id) {
+    // التأكد من أن الـ id بصيغة صالحة (UUID)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    // نتأكد فقط إذا كان الـ id طويل ويشبه الـ UUID، وإذا لم يكن، نحاول الاعتماد عليه كمعرف رقمي أو سلسلة نصية عادية حسب قاعدة البيانات، 
+    // ولكن الغالب أنها UUID. سنعطي صلاحية لـ DB أن ترفض ولكن نتجنب القيم الوهمية بالعربي.
+    if (parsed.target_id.match(/[\u0600-\u06FF]/)) {
+       return `عذراً، لم أتمكن من العثور على السجل المطلوب للتعديل. يرجى توضيح العملية بشكل أدق.`;
+    }
+
     if (parsed.operation === 'delete') {
       if (parsed.table === 'sales') {
          // fetch sale to get customer info
@@ -639,8 +696,9 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
       }
     } else if (parsed.operation === 'update' && parsed.update_data) {
       if (parsed.table === 'sales') {
-         const { error } = await supabase.from('sales').update(parsed.update_data).eq('id', parsed.target_id);
+         const { data, error } = await supabase.from('sales').update(parsed.update_data).eq('id', parsed.target_id).select('id');
          if (error) return `❌ صار خطأ بالتعديل: ${error.message}`;
+         if (!data || data.length === 0) return `⚠️ دزيت امر التعديل بس المبيعة مموجودة (يمكن الـ ID غلط أو انحذفت).`;
          
          // Update associated transaction
          const transUpdate: any = {};
@@ -653,9 +711,10 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
          }
          return `✅ تم تعديل المبيعة بنجاح!`;
       } else {
-         const { error } = await supabase.from(parsed.table).update(parsed.update_data).eq('id', parsed.target_id);
+         const { data, error } = await supabase.from(parsed.table).update(parsed.update_data).eq('id', parsed.target_id).select('id');
          if (error) return `❌ صار خطأ بالتعديل: ${error.message}`;
-         return `✅ تم التعديل بنجاح!`;
+         if (!data || data.length === 0) return `⚠️ دزيت امر التعديل بس السجل مموجود بهالـ ID، حاول توضح أكثر أو تسوي ريبلاي للسجل اللي تريده.`;
+         return `✅ تم تعديل معلوماتك بنجاح وسيفتهة بالداتا بيس!`;
       }
     }
   }
@@ -686,10 +745,16 @@ function startTelegramBot() {
   const rawAppUrl = process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
   const appUrl = rawAppUrl?.replace(/\/$/, '')?.replace('/#', '')?.replace('#', ''); // Remove trailing slash if any
   const isDev = !process.env.VERCEL && (appUrl?.includes('ais-dev') || appUrl?.includes('localhost') || !appUrl);
+  const isPre = appUrl?.includes('ais-pre');
 
   if (process.env.VERCEL) {
     // استخدام Webhook في بيئة الاستضافة (Vercel)
     bot = new TelegramBot(token);
+  } else if (isPre) {
+    // إيقاف البوت في بيئة العرض المسبق (Shared App) لمنع تضارب Polling
+    console.log('Bot is disabled in ais-pre environment to prevent 409 Conflict with ais-dev.');
+    bot = null;
+    return;
   } else {
     // تفعيل الـ Polling في بيئة التطوير
     console.log('Bot is running in Polling mode for Development.');
@@ -697,8 +762,8 @@ function startTelegramBot() {
     
     bot.on('polling_error', (error: any) => {
       if (error.code === 'ETELEGRAM' && error.message.includes('409 Conflict')) {
-        console.log('Another instance is polling. Stopping polling on this instance to avoid 409 Conflict.');
-        if (bot) bot.stopPolling();
+        console.log('Another instance is polling. Waiting gracefully... we will retry.');
+        // Don't permanently stop polling. Just let it keep retrying so we can overtake dead instances.
       } else {
         console.log('Polling error:', error.message);
       }
@@ -853,7 +918,11 @@ export async function handleTelegramMessage(msg: any) {
     }
 
     console.log('Received message from Telegram:', messageContent);
-    const text = messageContent.replace(BOT_USERNAME, '').trim();
+    let text = messageContent.replace(BOT_USERNAME, '').trim();
+    
+    if (msg.reply_to_message && msg.reply_to_message.text) {
+        text += `\n\n(هذه الرسالة هي رد على: "${msg.reply_to_message.text}")`;
+    }
     
     // حفظ معرف المحادثة لإرسال التقرير اليومي التلقائي
     activeChatIds.add(chatId);
