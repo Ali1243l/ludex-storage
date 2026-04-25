@@ -2,6 +2,7 @@ import express from "express";
 import cors from 'cors';
 import TelegramBot from 'node-telegram-bot-api';
 import { GoogleGenAI } from '@google/genai';
+import Groq from 'groq-sdk';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { execSync } from 'child_process';
@@ -252,22 +253,58 @@ try {
 
 // إعداد الذكاء الاصطناعي Gemini يتم عند الحاجة (Lazy Loading) لتجنب أخطاء بدء التشغيل
 let _aiClient: any = null;
+export let _aiKeyMode: 'gemini' | 'groq' = 'gemini';
+
 function getAiClient() {
   if (!_aiClient) {
-    let key = process.env.CUSTOM_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-    if (key) {
-      key = key.replace(/['"]/g, '').trim();
-    }
+    let key = process.env.CUSTOM_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || '';
+    key = key.replace(/['"]/g, '').trim();
     if (!key) {
       throw new Error('GEMINI_API_KEY is not set');
     }
-    console.log(`Debug: Using GEMINI_API_KEY starting with: ${key.substring(0, 5)}...`);
-    if (!key.startsWith('AIza')) {
-       console.warn('Warning: GEMINI_API_KEY does not start with AIza, it might be invalid.');
+    console.log(`Debug: Using API_KEY starting with: ${key.substring(0, 5)}...`);
+    
+    if (key.startsWith('gsk_')) {
+      _aiKeyMode = 'groq';
+      const groq = new Groq({ apiKey: key });
+      _aiClient = {
+        models: {
+          generateContent: async (opts: any) => {
+            const systemInst = opts.config?.systemInstruction || "";
+            const messages = [];
+            if (systemInst) messages.push({ role: 'system', content: systemInst });
+            messages.push({ role: 'user', content: opts.contents });
+            
+            const completion = await groq.chat.completions.create({
+              messages: messages as any,
+              model: opts.model,
+              response_format: opts.config?.responseMimeType === "application/json" ? { type: "json_object" } : undefined
+            });
+            return { text: completion.choices[0]?.message?.content || "" };
+          },
+          list: async () => {
+             const res = await groq.models.list();
+             return res.data.map((m: any) => ({ name: m.id }));
+          }
+        }
+      };
+    } else {
+      _aiKeyMode = 'gemini';
+      if (!key.startsWith('AIza')) {
+         console.warn('Warning: GEMINI_API_KEY does not start with AIza, it might be invalid.');
+      }
+      _aiClient = new GoogleGenAI({ apiKey: key });
     }
-    _aiClient = new GoogleGenAI({ apiKey: key });
   }
   return _aiClient;
+}
+
+export function getModelsToTry() {
+  if (!_aiClient) getAiClient();
+  if (_aiKeyMode === 'groq') {
+    return ['llama-3.3-70b-versatile', 'llama3-70b-8192', 'llama-3.1-8b-instant', 'llama3-8b-8192'];
+  }
+  return ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
 }
 
 // إعداد بوت التليكرام
@@ -364,7 +401,7 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
   رسالة المدير: ${text}
   `;
 
-  const modelsToTry = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-pro'];
+  const modelsToTry = getModelsToTry();
   let response;
   const ai = getAiClient();
 
@@ -730,12 +767,12 @@ function startTelegramBot() {
       console.error('Bot error:', error);
       
       // التحقق مما إذا كان الخطأ بسبب مفتاح API غير صالح
-      if (error.message?.includes('API key not valid') || error.message?.includes('API_KEY_INVALID')) {
-        bot?.sendMessage(chatId, 'عذراً، مفتاح الذكاء الاصطناعي (Gemini API Key) غير صالح أو غير موجود. يرجى تحديث المفتاح في إعدادات Secrets.');
+      if (error.message?.includes('API key not valid') || error.message?.includes('API_KEY_INVALID') || error.message?.includes('invalid_api_key')) {
+        bot?.sendMessage(chatId, 'عذراً، مفتاح الذكاء الاصطناعي غير صالح أو غير موجود. يرجى تحديث المفتاح في إعدادات Secrets.');
       } 
       // التحقق من خطأ تجاوز الحد المسموح (Rate Limit 429)
-      else if (error.message?.includes('429') || error.message?.includes('Quota exceeded')) {
-        bot?.sendMessage(chatId, 'عذراً أستاذ، السيرفر عليه ضغط حالياً (تجاوزنا الحد المسموح للذكاء الاصطناعي). يرجى الانتظار دقيقة والمحاولة مرة ثانية. 🙏');
+      else if (error.message?.includes('429') || error.message?.includes('Quota exceeded') || error.message?.includes('rate_limit_exceeded')) {
+        bot?.sendMessage(chatId, 'عذراً أستاذ، لقد تجاوزت الحد المجاني المسموح به للذكاء الاصطناعي أو هناك ضغط. يرجى الانتظار قليلاً أو إضافة مفتاح API لديه رصيد مدفوع من Google/Groq. 🙏');
       }
       else if (error.message?.includes('503') || error.message?.includes('high demand') || error.message?.includes('UNAVAILABLE')) {
         bot?.sendMessage(chatId, 'عذراً أستاذ، سيرفرات الذكاء الاصطناعي عليها ضغط عالي حالياً. يرجى المحاولة بعد شوية. ⌛');
@@ -795,7 +832,7 @@ function startTelegramBot() {
       اكتب التقرير بشكل مرتب، واذكر إجمالي المبيعات (اجمع الأسعار)، وأهم الحركات. استخدم الإيموجي المناسبة.
       `;
 
-      const modelsToTry = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-pro'];
+      const modelsToTry = getModelsToTry();
       let response;
       const ai = getAiClient();
 
