@@ -161,7 +161,9 @@ app.post('/api/telegram-webhook', async (req, res) => {
   if (req.body && req.body.message) {
     await handleTelegramMessage(req.body.message);
   } else if (bot) {
-    bot.processUpdate(req.body); // fallback for inline actions etc, fire and forget
+    try {
+      await bot.processUpdate(req.body); // fallback for inline actions etc, fire and forget
+    } catch (err) {}
   }
   
   res.sendStatus(200);
@@ -762,7 +764,7 @@ function startTelegramBot() {
       const reportText = response?.text || 'عذراً، لم أتمكن من توليد التقرير اليومي.';
 
       for (const chatId of activeChatIds) {
-        bot.sendMessage(chatId, `📊 **التقرير اليومي التلقائي** 📊\n\n${reportText}`, { parse_mode: 'Markdown' });
+        await bot.sendMessage(chatId, `📊 **التقرير اليومي التلقائي** 📊\n\n${reportText}`, { parse_mode: 'Markdown' });
       }
     } catch (error) {
       console.error('Error generating daily report:', error);
@@ -780,7 +782,7 @@ export async function handleTelegramMessage(msg: any) {
     if (!bot) return;
     const chatId = msg.chat.id;
     const isPrivate = msg.chat.type === 'private';
-    const BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || '@your_bot_username';
+    const BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || '@Ludex_store_storage_bot';
     const messageContent = msg.text || msg.caption || '';
 
     const isMention = messageContent.includes(BOT_USERNAME);
@@ -843,36 +845,36 @@ export async function handleTelegramMessage(msg: any) {
     if (!text) return;
 
     if (text === '/start') {
-      bot?.sendMessage(chatId, 'أهلاً بك يا مدير في المساعد الذكي لـ Ludex Store! 🤖\nاسألني أي شيء عن المبيعات، الزبائن، المنتجات، أو الاشتراكات، وراح أجاوبك من قاعدة البيانات مباشرة.');
+      await bot?.sendMessage(chatId, 'أهلاً بك يا مدير في المساعد الذكي لـ Ludex Store! 🤖\nاسألني أي شيء عن المبيعات، الزبائن، المنتجات، أو الاشتراكات، وراح أجاوبك من قاعدة البيانات مباشرة.');
       return;
     }
 
     // إرسال حالة "يكتب..." للمستخدم
-    bot?.sendChatAction(chatId, 'typing');
+    await bot?.sendChatAction(chatId, 'typing').catch(() => {});
 
     try {
       const replyMessage = await processBotMessage(text, supabase);
-      bot?.sendMessage(chatId, replyMessage, { parse_mode: 'Markdown' });
+      await bot?.sendMessage(chatId, replyMessage, { parse_mode: 'Markdown' });
 
     } catch (error: any) {
       console.error('Bot error:', error);
       
       // التحقق مما إذا كان الخطأ بسبب مفتاح API غير صالح
       if (error.message?.includes('API key not valid') || error.message?.includes('API_KEY_INVALID') || error.message?.includes('invalid_api_key')) {
-        bot?.sendMessage(chatId, 'عذراً، مفتاح الذكاء الاصطناعي غير صالح أو غير موجود. يرجى تحديث المفتاح في إعدادات Secrets.');
+        await bot?.sendMessage(chatId, 'عذراً، مفتاح الذكاء الاصطناعي غير صالح أو غير موجود. يرجى تحديث المفتاح في إعدادات Secrets.');
       } 
       // التحقق من خطأ تجاوز الحد المسموح (Rate Limit 429)
       else if (error.message?.includes('429') || error.message?.includes('Quota exceeded') || error.message?.includes('rate_limit_exceeded')) {
-        bot?.sendMessage(chatId, 'عذراً أستاذ، لقد تجاوزت الحد المجاني المسموح به للذكاء الاصطناعي أو هناك ضغط. يرجى الانتظار قليلاً أو إضافة مفتاح API لديه رصيد مدفوع من Google/Groq. 🙏');
+        await bot?.sendMessage(chatId, 'عذراً أستاذ، لقد تجاوزت الحد المجاني المسموح به للذكاء الاصطناعي أو هناك ضغط. يرجى الانتظار قليلاً أو إضافة مفتاح API لديه رصيد مدفوع من Google/Groq. 🙏');
       }
       else if (error.message?.includes('503') || error.message?.includes('high demand') || error.message?.includes('UNAVAILABLE')) {
-        bot?.sendMessage(chatId, 'عذراً أستاذ، سيرفرات الذكاء الاصطناعي عليها ضغط عالي حالياً. يرجى المحاولة بعد شوية. ⌛');
+        await bot?.sendMessage(chatId, 'عذراً أستاذ، سيرفرات الذكاء الاصطناعي عليها ضغط عالي حالياً. يرجى المحاولة بعد شوية. ⌛');
       }
       else if (error.message?.includes('404') || error.message?.includes('not found')) {
-        bot?.sendMessage(chatId, 'عذراً، الموديل المطلوب غير متوفر حالياً. راح نحاول نحلها بأقرب وقت.');
+        await bot?.sendMessage(chatId, 'عذراً، الموديل المطلوب غير متوفر حالياً. راح نحاول نحلها بأقرب وقت.');
       }
       else {
-        bot?.sendMessage(chatId, `عذراً، صار خطأ أثناء معالجة طلبك.\n\nتفاصيل الخطأ للمطور:\n${error.message || 'خطأ غير معروف'}`);
+        await bot?.sendMessage(chatId, `عذراً، صار خطأ أثناء معالجة طلبك.\n\nتفاصيل الخطأ للمطور:\n${error.message || 'خطأ غير معروف'}`);
       }
     }
   }
