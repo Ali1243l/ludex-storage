@@ -666,7 +666,13 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
       custCode = customer.customer_code;
       
       const newTotal = (Number(customer.total_spent) || 0) + price;
-      updateCustomerPromise = supabase.from('customers').update({ total_spent: newTotal }).eq('id', customer.id);
+      const newCount = (Number(customer.purchase_count) || 0) + 1;
+      updateCustomerPromise = supabase.from('customers').update({ total_spent: newTotal, purchase_count: newCount }).eq('id', customer.id).then(({error}) => {
+          if (error && error.message.includes('purchase_count')) {
+              return supabase!.from('customers').update({ total_spent: newTotal }).eq('id', customer.id);
+          }
+          return {error};
+      });
       
       previousSalesPromise = supabase.from('sales')
         .select('date')
@@ -678,7 +684,14 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
         if (maxData && maxData.length > 0 && maxData[0].customer_number) {
           nextNumber = parseInt(maxData[0].customer_number) + 1;
         }
-        return supabase.from('customers').insert([{ name: d.customerName || 'مجهول', username: d.customerUsername || null, customer_code: custCode, customer_number: nextNumber, total_spent: price }]);
+        const insertCust: any = { name: d.customerName || 'مجهول', username: d.customerUsername || null, customer_code: custCode, customer_number: nextNumber, total_spent: price, purchase_count: 1 };
+        return supabase!.from('customers').insert([insertCust]).then(({error}) => {
+            if (error && error.message.includes('purchase_count')) {
+                delete insertCust.purchase_count;
+                return supabase!.from('customers').insert([insertCust]);
+            }
+            return {error};
+        });
       });
     }
 
@@ -765,31 +778,35 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
 
     if (parsed.operation === 'delete') {
       if (parsed.table === 'sales') {
-         // fetch sale to get customer info
          const { data: saleToDel } = await supabase.from('sales').select('*').eq('id', parsed.target_id).single();
-         if (saleToDel) {
-            // Delete associated transactions
-            await supabase.from('transactions').delete().or(`notes.ilike.%[تلقائي] رقم المبيعة المرجعي: [${parsed.target_id}]%,notes.ilike.%[تلقائي] رقم المبيعة: [${parsed.target_id}]%`);
-         }
          const { error } = await supabase.from('sales').delete().eq('id', parsed.target_id);
          if (error) return `❌ صار خطأ بالحذف: ${error.message}`;
 
          if (saleToDel) {
-            // Clean up customer if no other sales exist
-            try {
-               if (saleToDel.customerCode) {
-                  const { data: otherSales } = await supabase.from('sales').select('id').eq('customerCode', saleToDel.customerCode).limit(1);
-                  if (!otherSales || otherSales.length === 0) {
-                      await supabase.from('customers').delete().eq('customer_code', saleToDel.customerCode);
-                  }
-               } else if (saleToDel.customerName) {
-                  const { data: otherSales } = await supabase.from('sales').select('id').eq('customerName', saleToDel.customerName).limit(1);
-                  if (!otherSales || otherSales.length === 0) {
-                      await supabase.from('customers').delete().eq('name', saleToDel.customerName);
-                  }
-               }
-            } catch(err) {
-               console.error("Error cleaning up customer:", err);
+            const price = Number(saleToDel.price) || 0;
+            const custCode = saleToDel.customerCode;
+            
+            // Delete associated transactions
+            await supabase.from('transactions').delete().or(`notes.ilike.%[تلقائي] رقم المبيعة المرجعي: [${parsed.target_id}]%,notes.ilike.%[تلقائي] رقم المبيعة: [${parsed.target_id}]%`);
+            
+            // Update or Delete the customer
+            if (custCode) {
+                const { data: customer } = await supabase.from('customers').select('id, total_spent, purchase_count').eq('customer_code', custCode).single();
+                if (customer) {
+                    const newCount = (Number(customer.purchase_count) || 1) - 1;
+                    const newTotal = (Number(customer.total_spent) || 0) - price;
+                    
+                    if (newCount <= 0) {
+                        await supabase.from('customers').delete().eq('id', customer.id);
+                    } else {
+                        const updates: any = { purchase_count: newCount, total_spent: newTotal };
+                        const { error: custUpdateError } = await supabase.from('customers').update(updates).eq('id', customer.id);
+                        if (custUpdateError && custUpdateError.message.includes('purchase_count')) {
+                            delete updates.purchase_count;
+                            await supabase.from('customers').update(updates).eq('id', customer.id);
+                        }
+                    }
+                }
             }
          }
          return `✅ تم الحذف من المبيعات والقوائم المرتبطة بنجاح!`;
@@ -903,12 +920,89 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
     const baghdadTime = new Date(Date.now() + (3 * 60 * 60 * 1000));
     const dateStr = baghdadTime.toISOString().split('T')[0];
     
+    // 1. معالجة الملاحظات (Notes) بشكل صارم
+    let strictNotes = '';
+    if (session.data.notes) {
+        const linesStr = typeof session.data.notes === 'string' ? session.data.notes : '';
+        const lines = linesStr.split('\n');
+        strictNotes = lines.filter(line => line.includes('ملاحظة:') || line.includes('ملاحظات:')).join('\n').trim();
+    }
+
+    // 2. التحقق من الزبون (Customer Lookup & Creation)
+    let custCode = '';
+    const cleanUsername = session.data.customerUsername ? session.data.customerUsername.replace(/@/g, '').trim().toLowerCase() : null;
+    const cleanName = session.data.customerName ? session.data.customerName.trim().toLowerCase() : null;
+    
+    // Fetch all to bypass JSONB type mismatch errors with ilike
+    const { data: allCusts } = await supabase.from('customers').select('*');
+    let existingCust: any = null;
+    
+    if (allCusts) {
+      for (const c of allCusts) {
+        let cName = typeof c.name === 'string' ? c.name.toLowerCase() : (c.name ? JSON.stringify(c.name).toLowerCase() : '');
+        let cUser = typeof c.username === 'string' ? c.username.toLowerCase() : (c.username ? JSON.stringify(c.username).toLowerCase() : '');
+        
+        let matched = false;
+        if (cleanUsername && cUser === cleanUsername) {
+          matched = true;
+        } else if (cleanName && cName === cleanName) {
+          matched = true;
+        }
+        
+        if (matched) {
+          existingCust = c;
+          break; // Stop at first match
+        }
+      }
+    }
+
+    if (existingCust) {
+        custCode = existingCust.customer_code;
+    } else {
+        custCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.random().toString().substring(2, 5);
+        const { data: maxData } = await supabase.from('customers').select('customer_number').order('customer_number', { ascending: false }).limit(1);
+        let nextNumber = 1;
+        if (maxData && maxData.length > 0 && maxData[0].customer_number) {
+            nextNumber = parseInt(maxData[0].customer_number) + 1;
+        }
+        
+        const customerInsertData: any = {
+            name: session.data.customerName || 'مجهول',
+            customer_code: custCode,
+            customer_number: nextNumber,
+            total_spent: session.data.price || 0,
+            purchase_count: 1
+        };
+        if (session.data.customerUsername) {
+            customerInsertData.username = session.data.customerUsername;
+        }
+        
+        const { error: custError } = await supabase.from('customers').insert([customerInsertData]);
+        if (custError) {
+             const errorMsg = custError.message;
+             if (errorMsg.includes("column") && errorMsg.includes("purchase_count")) {
+                 delete customerInsertData.purchase_count;
+                 const { error: custError2 } = await supabase.from('customers').insert([customerInsertData]);
+                 if (custError2 && custError2.message.includes("column") && custError2.message.includes("does not exist") && customerInsertData.username) {
+                     delete customerInsertData.username;
+                     await supabase.from('customers').insert([customerInsertData]);
+                 }
+             } else if (errorMsg.includes("column") && errorMsg.includes("does not exist") && customerInsertData.username) {
+                 delete customerInsertData.username;
+                 await supabase.from('customers').insert([customerInsertData]);
+             } else {
+                 console.error('Customer insert error:', custError);
+             }
+        }
+    }
+
     const insertData: any = {
         id: saleId,
         customerName: session.data.customerName,
+        customerCode: custCode,
         productName: session.data.productName,
         price: session.data.price,
-        notes: session.data.notes,
+        notes: strictNotes,
         date: dateStr
     };
     
@@ -923,16 +1017,54 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
         // Ignore column mapping error if customerUsername doesn't exist
         if (errorMsg.includes("column") && errorMsg.includes("does not exist") && session.data.customerUsername) {
              delete insertData.customerUsername;
-             await supabase.from('sales').insert([insertData]);
-             // Proceed to send receipt
+             const { error: retryError } = await supabase.from('sales').insert([insertData]);
+             if (retryError) {
+                 await bot?.sendMessage(chatId, 'حدث خطأ أثناء الحفظ (إعادة محاولة): ' + retryError.message);
+                 return;
+             }
         } else {
              await bot?.sendMessage(chatId, 'حدث خطأ أثناء الحفظ: ' + error.message);
              return;
         }
     }
     
+    // إدراج الواردات المرافقة لهذا البيع في جدول transactions
+    const transInsertData: any = {
+        type: 'income',
+        amount: session.data.price,
+        date: dateStr,
+        description: session.data.productName || 'مبيعة مبسطة',
+        person: session.data.customerName || 'مجهول',
+        notes: `[تلقائي] رقم المبيعة: [${saleId}]`
+    };
+    if (session.data.customerUsername) {
+        transInsertData.username = session.data.customerUsername;
+    }
+
+    const { error: transError } = await supabase.from('transactions').insert([transInsertData]);
+    if (transError) {
+         if (transError.message.includes("column") && transError.message.includes("does not exist") && transInsertData.username) {
+             delete transInsertData.username;
+             await supabase.from('transactions').insert([transInsertData]);
+         } else {
+             console.error('Transactions insert error:', transError);
+         }
+    }
+
+    if (existingCust) {
+        const newTotal = (Number(existingCust.total_spent) || 0) + (Number(session.data.price) || 0);
+        const newCount = (Number(existingCust.purchase_count) || 0) + 1;
+        const updates: any = { total_spent: newTotal, purchase_count: newCount };
+        
+        const { error: updateError } = await supabase.from('customers').update(updates).eq('id', existingCust.id);
+        if (updateError && updateError.message.includes('column') && updateError.message.includes('purchase_count')) {
+            delete updates.purchase_count;
+            await supabase.from('customers').update(updates).eq('id', existingCust.id);
+        }
+    }
+    
     const custDisplay = session.data.customerUsername ? `${session.data.customerName} (${session.data.customerUsername})` : session.data.customerName;
-    const receiptText = `✅ تمت إضافة مبيعة جديدة!\n\n👤 الزبون: ${custDisplay}\n📦 المنتج: ${session.data.productName}\n💵 السعر: ${session.data.price} د.ع\n📝 ملاحظات: ${session.data.notes || 'لا يوجد'}`;
+    const receiptText = `✅ تمت إضافة مبيعة جديدة!\n\n👤 الزبون: ${custDisplay}\n📦 المنتج: ${session.data.productName}\n💵 السعر: ${session.data.price} د.ع\n📝 ملاحظات: ${strictNotes || 'لا يوجد'}`;
     await bot?.sendMessage(chatId, receiptText, {
         reply_markup: {
             inline_keyboard: [
@@ -1007,8 +1139,43 @@ function startTelegramBot() {
         if (data.startsWith('delete_sale_')) {
           const saleId = data.replace('delete_sale_', '');
           if (!supabase) throw new Error('Database not connected');
-          const { error } = await supabase.from('sales').delete().eq('id', saleId);
-          if (error) throw error;
+          
+          const { data: saleToDel, error: fetchError } = await supabase.from('sales').select('price, customerCode').eq('id', saleId).single();
+          
+          if (!fetchError && saleToDel) {
+             const price = Number(saleToDel.price) || 0;
+             const custCode = saleToDel.customerCode;
+             
+             // 2. Delete the sale
+             const { error: deleteError } = await supabase.from('sales').delete().eq('id', saleId);
+             if (deleteError) throw deleteError;
+             
+             // 3. Delete the transaction (revenue)
+             await supabase.from('transactions').delete().or(`notes.ilike.%[تلقائي] رقم المبيعة: [${saleId}]%,notes.ilike.%[تلقائي] رقم المبيعة المرجعي: [${saleId}]%`);
+             
+             // 4. Update or Delete the customer
+             if (custCode) {
+                 const { data: customer } = await supabase.from('customers').select('id, total_spent, purchase_count').eq('customer_code', custCode).single();
+                 if (customer) {
+                     const newCount = (Number(customer.purchase_count) || 1) - 1;
+                     const newTotal = (Number(customer.total_spent) || 0) - price;
+                     
+                     if (newCount <= 0) {
+                         await supabase.from('customers').delete().eq('customer_code', custCode);
+                     } else {
+                         const updates: any = { purchase_count: newCount, total_spent: newTotal };
+                         const { error: custUpdateError } = await supabase.from('customers').update(updates).eq('id', customer.id);
+                         if (custUpdateError && custUpdateError.message.includes('purchase_count')) {
+                             delete updates.purchase_count;
+                             await supabase.from('customers').update(updates).eq('id', customer.id);
+                         }
+                     }
+                 }
+             }
+          } else {
+             // Fallback just in case
+             await supabase.from('sales').delete().eq('id', saleId);
+          }
           
           await bot?.editMessageText('❌ تم حذف المبيعة.', {
             chat_id: chatId,
@@ -1198,13 +1365,15 @@ const processedMessages = new Set<number>();
 
 function parsePrice(input: string): number {
     let clean = input.replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString());
-    let multiplier = 1;
-    if (clean.includes('الف') || clean.includes('ألف')) {
-        multiplier = 1000;
-    }
     const match = clean.match(/\d+(\.\d+)?/);
     if (!match) return NaN;
-    return parseFloat(match[0]) * multiplier;
+    let price = parseFloat(match[0]);
+    if (clean.includes('الف') || clean.includes('ألف')) {
+        if (price < 1000) {
+            price *= 1000;
+        }
+    }
+    return price;
 }
 
 function parseCustomer(input: string): { name: string, username: string } {
@@ -1327,6 +1496,50 @@ export async function handleTelegramMessage(msg: any) {
             }
         } catch(err: any) {
             await bot?.sendMessage(chatId, '❌ خطأ: ' + err.message);
+        }
+        return;
+    }
+
+    if (text.startsWith('إضافة حساب\n') || text.startsWith('اضافة حساب\n')) {
+        try {
+            const parts = text.split('\n').map(p => p.trim()).filter(p => !!p);
+            if (parts.length >= 6) {
+                const [cmd, name, category, activationDate, expirationDate, credentialsStr, ...notesArr] = parts;
+                let account_username = '';
+                let account_password = '';
+                
+                if (credentialsStr.includes('-')) {
+                    const credParts = credentialsStr.split('-');
+                    account_username = credParts[0].trim();
+                    account_password = credParts.slice(1).join('-').trim();
+                } else {
+                    account_username = credentialsStr;
+                }
+                
+                const notes = notesArr.join('\n');
+                
+                if (!supabase) throw new Error('قاعدة البيانات غير متصلة');
+                
+                const { error } = await supabase.from('subscriptions').insert([{
+                    name,
+                    category,
+                    activationDate,
+                    expirationDate,
+                    account_username,
+                    account_password,
+                    notes
+                }]);
+                
+                if (error) {
+                    await bot?.sendMessage(chatId, `❌ لم يتم حفظ الحساب. السبب: ${error.message}`);
+                } else {
+                    await bot?.sendMessage(chatId, `✅ تم إضافة الحساب بنجاح!\n\n🔹 الحساب: ${name}\n🔹 التصنيف: ${category}\n🔹 اليوزر: ${account_username}\n🔹 الرمز: ${account_password}\n🔹 التفعيل: ${activationDate}\n🔹 الانتهاء: ${expirationDate}\n${notes ? `📝 الملاحظات: ${notes}` : ''}`);
+                }
+            } else {
+                await bot?.sendMessage(chatId, '❌ الصيغة غير مكتملة. يجب أن تكون بهذا النسق:\n\nإضافة حساب\nاسم الحساب\nالتصنيف\nتاريخ التفعيل\nتاريخ الانتهاء\nاليوزر - الباسورد\nالملاحظات');
+            }
+        } catch(err: any) {
+            await bot?.sendMessage(chatId, '❌ خطأ أثناء التسجيل: ' + err.message);
         }
         return;
     }
