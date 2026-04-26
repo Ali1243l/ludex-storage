@@ -211,7 +211,7 @@ app.post('/api/tg-app/sales', async (req, res) => {
       if (bot) {
         const allowedChatIdsStr = process.env.ALLOWED_CHAT_IDS || process.env.ALLOWED_CHAT_ID;
         const allowedIds = allowedChatIdsStr ? allowedChatIdsStr.split(',').map(id => id.trim()) : [];
-        const msgText = `✅ تمت إضافة مبيعة جديدة!\n\n👤 الزبون: ${customerName}\n📦 المنتج: ${productName}\n💵 السعر: ${price} د.ع\n📝 ملاحظات: ${notes || 'لا يوجد'}`;
+        const msgText = `✅ تمت إضافة مبيعة جديدة!\n\n👤 الزبون: \`${customerName}\`\n📦 المنتج: \`${productName}\`\n💵 السعر: \`${price} د.ع\`\n📝 ملاحظات: ${notes || 'لا يوجد'}`;
         const appUrl = 'https://ais-pre-eygzcw66qbzrh6ayhzq3vr-366249896315.europe-west2.run.app/tg-sale.html?edit_id=' + saleId;
         const markup = {
             inline_keyboard: [[
@@ -220,7 +220,7 @@ app.post('/api/tg-app/sales', async (req, res) => {
             ]]
         };
         for (const id of allowedIds) {
-          bot.sendMessage(id, msgText, {  reply_markup: markup }).catch(console.error);
+          bot.sendMessage(id, msgText, { parse_mode: 'Markdown', reply_markup: markup }).catch(console.error);
         }
       }
     }
@@ -728,22 +728,27 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
       return `❌ خطأ في البيعة: ${saleRes.error.message}`;
     }
 
-    if (previousSalesPromise && existingCust && existingCust.length > 0) {
-      // Find where previousSalesPromise result is (it's at index 1 since updateCustomer, previousSales, sale, trans)
-      const prevSalesRes = results[1]; 
-      const previousSales = prevSalesRes.data;
-      if (previousSales && previousSales.length > 0) {
-        const purchaseCount = previousSales.length + 1;
-        const lastDate = previousSales[0].date;
-        const dispName = d.customerName || existingCust[0].name || 'مجهول';
-        const dispId = existingCust[0].customer_number || 'غير متوفر';
-        
-        previousBuyerAlert = `\n\n---\n✅ هذا الزبون مشتري سابق!\n👤 اسم الزبون: \`${dispName}\`\n🆔 التسلسل (ID): \`#${dispId}\`\n🛒 عدد مرات الشراء: \`${purchaseCount}\`\n📅 تاريخ آخر شراء: \`${lastDate}\`\n🤖 @LudexSheetsBot\n---`;
+    let customerSummary = '';
+    if (existingCust && existingCust.length > 0) {
+      const customer = existingCust[0];
+      const purchaseCount = (Number(customer.purchase_count) || 0) + 1;
+      const totalSpent = (Number(customer.total_spent) || 0) + price;
+      
+      let lastDateInfo = '';
+      if (previousSalesPromise) {
+        const prevSalesRes = results[1];
+        if (prevSalesRes && prevSalesRes.data && prevSalesRes.data.length > 0) {
+           lastDateInfo = `\n📅 تاريخ آخر شراء: \`${prevSalesRes.data[0].date}\``;
+        }
       }
+      
+      customerSummary = `\n\n---\n✅ معلومات الزبون (مشتري سابق - سهلة النسخ):\nالاسم: \`${customer.name}\`\nعدد مرات الشراء: \`${purchaseCount}\`\nكود الزبون: \`${customer.customer_code}\`\nالمبلغ الكلي: \`${totalSpent}\`${lastDateInfo}`;
+    } else {
+      customerSummary = `\n\n---\n✅ معلومات الزبون (زبون جديد - سهلة النسخ):\nالاسم: \`${d.customerName || 'مجهول'}\`\nعدد مرات الشراء: \`1\`\nكود الزبون: \`${custCode}\`\nالمبلغ الكلي: \`${price}\``;
     }
 
-    if (transRes.error) return `⚠️ المبيعة تسجلت بس بدون واردات: ${transRes.error.message}${previousBuyerAlert}`;
-    return `✅ تمت المبيعة!\n\n${parsed.message || ''}${previousBuyerAlert}`;
+    if (transRes.error) return `⚠️ المبيعة تسجلت بس بدون واردات: ${transRes.error.message}${customerSummary}`;
+    return `✅ تمت المبيعة!\n\n${parsed.message || ''}${customerSummary}`;
   } 
   else if (parsed.action === 'insert_transaction' && parsed.transaction_data) {
     const d = parsed.transaction_data;
@@ -847,12 +852,17 @@ async function generateTodayReport() {
   if (!supabase) return "قاعدة البيانات غير متصلة.";
   
   try {
-    const baghdadTime = new Date(Date.now() + (3 * 60 * 60 * 1000));
-    const todayStr = baghdadTime.toISOString().split('T')[0];
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
     
+    const startISO = startOfDay.toISOString();
+    const endISO = endOfDay.toISOString();
+
     const [salesRes, revenuesRes] = await Promise.all([
-        supabase.from('sales').select('*').eq('date', todayStr),
-        supabase.from('transactions').select('amount').eq('type', 'revenue').eq('date', todayStr)
+        supabase.from('sales').select('*').gte('created_at', startISO).lte('created_at', endISO),
+        supabase.from('transactions').select('amount').eq('type', 'income').gte('created_at', startISO).lte('created_at', endISO)
     ]);
     
     const sales = salesRes.data || [];
@@ -1063,9 +1073,21 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
         }
     }
     
+    let finalCustInfo = null;
+    if (custCode) {
+        const { data: finalCust } = await supabase.from('customers').select('*').eq('customer_code', custCode).single();
+        if (finalCust) finalCustInfo = finalCust;
+    }
+
     const custDisplay = session.data.customerUsername ? `${session.data.customerName} (${session.data.customerUsername})` : session.data.customerName;
-    const receiptText = `✅ تمت إضافة مبيعة جديدة!\n\n👤 الزبون: ${custDisplay}\n📦 المنتج: ${session.data.productName}\n💵 السعر: ${session.data.price} د.ع\n📝 ملاحظات: ${strictNotes || 'لا يوجد'}`;
+    let receiptText = `✅ تمت إضافة مبيعة جديدة!\n\n👤 الزبون: ${custDisplay}\n📦 المنتج: ${session.data.productName}\n💵 السعر: ${session.data.price} د.ع\n📝 ملاحظات: ${strictNotes || 'لا يوجد'}`;
+    
+    if (finalCustInfo) {
+        receiptText += `\n\n---\n✅ معلومات الزبون (سهلة النسخ):\nالاسم: \`${finalCustInfo.name}\`\nعدد مرات الشراء: \`${finalCustInfo.purchase_count || 1}\`\nكود الزبون: \`${finalCustInfo.customer_code}\`\nالمبلغ الكلي: \`${finalCustInfo.total_spent || session.data.price}\``;
+    }
+
     await bot?.sendMessage(chatId, receiptText, {
+        parse_mode: 'Markdown',
         reply_markup: {
             inline_keyboard: [
                [{ text: '✏️ تعديل', callback_data: `edit_sale_${saleId}` }, { text: '🗑️ حذف', callback_data: `delete_sale_${saleId}` }]
@@ -1186,6 +1208,12 @@ function startTelegramBot() {
           const reportText = await generateTodayReport();
           await bot?.sendMessage(chatId, reportText);
         }
+        else if (data === 'add_account_help') {
+          await bot?.sendMessage(chatId, 'أرسل تفاصيل الحساب كالتالي:\n\nإضافة حساب\nاسم الحساب\nالتصنيف\nتاريخ التفعيل\nتاريخ الانتهاء\nاليوزر - الباسورد\nالملاحظات');
+        }
+        else if (data === 'add_product_help') {
+          await bot?.sendMessage(chatId, 'أرسل تفاصيل المنتج كالتالي:\n\nإضافة منتج\nاسم المنتج\nسعر البيع\nسعر التكلفة\nالتصنيف\nالكمية في المخزن');
+        }
         else if (data === 'start_sale_wizard') {
            if (!supabase) throw new Error('Database not connected');
            const productsRes = await supabase.from('products').select('id, name, sellingPrice').order('name');
@@ -1291,16 +1319,19 @@ function startTelegramBot() {
       }
 
       console.log('Generating daily report...');
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString();
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      const startISO = startOfDay.toISOString();
+      const endISO = endOfDay.toISOString();
 
-      // جلب البيانات الجديدة في آخر 24 ساعة
+      // جلب البيانات الجديدة خلال اليوم الحالي بصرامة
       const [newSales, newTransactions, newCustomers] = await Promise.all([
-        supabase.from('sales').select('productName, price, date, customerName').gte('date', yesterdayStr),
-        supabase.from('transactions').select('type, amount, date, description').gte('date', yesterdayStr),
-        // قد لا يحتوي جدول الزبائن على created_at، لذلك نتجاهل الخطأ إذا حدث
-        supabase.from('customers').select('name, username, customer_number').gte('created_at', yesterdayStr).then((res: any) => res).catch(() => ({ data: [] }))
+        supabase.from('sales').select('productName, price, date, customerName').gte('created_at', startISO).lte('created_at', endISO),
+        supabase.from('transactions').select('type, amount, date, description').gte('created_at', startISO).lte('created_at', endISO),
+        supabase.from('customers').select('name, username, customer_number').gte('created_at', startISO).lte('created_at', endISO).then((res: any) => res).catch(() => ({ data: [] }))
       ]);
 
       const salesData = newSales.data || [];
@@ -1461,12 +1492,12 @@ export async function handleTelegramMessage(msg: any) {
 
     if (!text) return;
 
-    if (text === 'قائمة' || text === '/menu' || text === 'القائمة') {
-      await bot?.sendMessage(chatId, 'اختر من القائمة التالية:', {
+    if (text === '/start' || text === 'قائمة' || text === '/menu' || text === 'القائمة') {
+      await bot?.sendMessage(chatId, 'أهلاً بك يا مدير في المساعد الذكي لـ Ludex Store! 🤖\nاختر من القائمة التالية:', {
         reply_markup: {
           inline_keyboard: [
-            [{ text: '➕ إضافة مبيعة', callback_data: 'start_sale_wizard' }],
-            [{ text: '📊 ملخص اليوم', callback_data: 'report_today' }]
+            [{ text: '➕ إضافة مبيعة', callback_data: 'start_sale_wizard' }, { text: '📊 ملخص اليوم', callback_data: 'report_today' }],
+            [{ text: '🎮 إضافة حساب جديد', callback_data: 'add_account_help' }, { text: '📦 إضافة منتج', callback_data: 'add_product_help' }]
           ]
         }
       });
@@ -1476,6 +1507,35 @@ export async function handleTelegramMessage(msg: any) {
     if (text === '/report' || text === 'تقرير') {
         const reportText = await generateTodayReport();
         await bot?.sendMessage(chatId, reportText);
+        return;
+    }
+
+    if (text.startsWith('إضافة منتج\n') || text.startsWith('اضافة منتج\n')) {
+        try {
+            const parts = text.split('\n').map(p => p.trim()).filter(p => !!p);
+            if (parts.length >= 2) {
+                const name = parts[1];
+                const sellingPrice = parts.length > 2 ? Number(parts[2].replace(/[^\d.]/g, '')) : 0;
+                const costPrice = parts.length > 3 ? Number(parts[3].replace(/[^\d.]/g, '')) : 0;
+                const category = parts.length > 4 ? parts[4] : 'عام';
+                let stock = null;
+                if (parts.length > 5 && parts[5] && !isNaN(Number(parts[5].replace(/[^\d]/g, '')))) {
+                    stock = Number(parts[5].replace(/[^\d]/g, ''));
+                }
+                
+                if (!supabase) throw new Error('Database not connected');
+                const insertData: any = { name, sellingPrice, costPrice, category };
+                if (stock !== null) insertData.stockAmount = stock;
+                
+                const { error } = await supabase.from('products').insert([insertData]);
+                if (error) throw error;
+                await bot?.sendMessage(chatId, `✅ تم إضافة المنتج بنجاح:\nالاسم: ${name}\nسعر البيع: ${sellingPrice}`);
+            } else {
+                await bot?.sendMessage(chatId, '❌ الصيغة غير صحيحة. يجب أن تتضمن على الأقل اسم المنتج في السطر الثاني.');
+            }
+        } catch(err: any) {
+            await bot?.sendMessage(chatId, '❌ خطأ: ' + err.message);
+        }
         return;
     }
 
@@ -1720,17 +1780,12 @@ export async function handleTelegramMessage(msg: any) {
         }
     }
 
-    if (text === '/start') {
-      await bot?.sendMessage(chatId, 'أهلاً بك يا مدير في المساعد الذكي لـ Ludex Store! 🤖\nاسألني أي شيء عن المبيعات، الزبائن، المنتجات، أو الاشتراكات، وراح أجاوبك من قاعدة البيانات مباشرة.');
-      return;
-    }
-
     // إرسال حالة "يكتب..." للمستخدم
     await bot?.sendChatAction(chatId, 'typing').catch(() => {});
 
     try {
       const replyMessage = await processBotMessage(text, supabase);
-      await bot?.sendMessage(chatId, replyMessage);
+      await bot?.sendMessage(chatId, replyMessage, { parse_mode: 'Markdown' });
 
     } catch (error: any) {
       console.error('Bot error:', error);
