@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>إضافة مبيعة - Ludex Store</title>
+    <!-- Telegram Web App JS -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-color: var(--tg-theme-bg-color, #1c1c1d);
+            --text-color: var(--tg-theme-text-color, #ffffff);
+            --hint-color: var(--tg-theme-hint-color, #9e9e9e);
+            --button-color: var(--tg-theme-button-color, #2481cc);
+            --button-text-color: var(--tg-theme-button-text-color, #ffffff);
+            --input-bg-color: var(--tg-theme-secondary-bg-color, #2c2c2e);
+            --border-color: #3d3d41;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 16px;
+            box-sizing: border-box;
+        }
+
+        h2 {
+            margin-top: 0;
+            margin-bottom: 24px;
+            font-size: 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: var(--hint-color);
+        }
+
+        select, input, textarea {
+            width: 100%;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            background-color: var(--input-bg-color);
+            color: var(--text-color);
+            font-size: 16px;
+            box-sizing: border-box;
+            appearance: none;
+            outline: none;
+        }
+
+        select:focus, input:focus, textarea:focus {
+            border-color: var(--button-color);
+        }
+
+        /* Default dropdown arrow for select */
+        select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.5 4.5L6 8L9.5 4.5' stroke='%239e9e9e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: left 12px center;
+            padding-left: 30px;
+        }
+
+        textarea {
+            resize: none;
+            min-height: 80px;
+        }
+
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .notification {
+            position: fixed;
+            top: -50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: top 0.3s ease;
+            z-index: 2000;
+        }
+
+        .notification.show {
+            top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading-overlay">
+        <div class="spinner" style="display: block; border-top-color: var(--button-color);"></div>
+    </div>
+
+    <div id="notification" class="notification">تم الحفظ بنجاح!</div>
+
+    <h2>إضافة مبيعة جديدة</h2>
+
+    <form id="saleForm">
+        <div class="form-group">
+            <label for="customer">اختر الزبون</label>
+            <select id="customer" required>
+                <option value="" disabled selected>جاري التحميل...</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="product">اختر المنتج</label>
+            <select id="product" required>
+                <option value="" disabled selected>جاري التحميل...</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="price">السعر (د.ع)</label>
+            <input type="number" id="price" placeholder="0" required>
+        </div>
+
+        <div class="form-group">
+            <label for="notes">ملاحظات (اختياري)</label>
+            <textarea id="notes" placeholder="ملاحظات إضافية..."></textarea>
+        </div>
+    </form>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Expand to full height
+        tg.MainButton.text = "حفظ المبيعة";
+        tg.MainButton.color = tg.themeParams.button_color || "#2481cc";
+        tg.MainButton.textColor = tg.themeParams.button_text_color || "#ffffff";
+        
+        let productsMap = {};
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const editId = urlParams.get('edit_id');
+
+        async function loadData() {
+            try {
+                const res = await fetch('/api/tg-app/data');
+                const data = await res.json();
+                
+                // Populate customers
+                const customerSelect = document.getElementById('customer');
+                customerSelect.innerHTML = '<option value="" disabled selected>اختر الزبون</option>';
+                data.customers.forEach(c => {
+                    if(!c) return;
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    opt.textContent = c;
+                    customerSelect.appendChild(opt);
+                });
+
+                // Populate products
+                const productSelect = document.getElementById('product');
+                productSelect.innerHTML = '<option value="" disabled selected>اختر المنتج</option>';
+                data.products.forEach(p => {
+                    if(!p.name) return;
+                    const opt = document.createElement('option');
+                    opt.value = p.name;
+                    opt.textContent = p.name;
+                    productSelect.appendChild(opt);
+                    productsMap[p.name] = p.sellingPrice || '';
+                });
+
+                if (editId) {
+                    document.querySelector('h2').textContent = 'تعديل مبيعة';
+                    tg.MainButton.text = "حفظ التعديلات";
+                    const saleRes = await fetch('/api/tg-app/sales/' + editId);
+                    if (saleRes.ok) {
+                        const saleData = await saleRes.json();
+                        if (saleData) {
+                            if (saleData.customerName) customerSelect.value = saleData.customerName;
+                            if (saleData.productName) productSelect.value = saleData.productName;
+                            if (saleData.price) document.getElementById('price').value = saleData.price;
+                            if (saleData.notes) document.getElementById('notes').value = saleData.notes;
+                        }
+                    }
+                }
+
+                document.getElementById('loading').style.display = 'none';
+                tg.MainButton.show();
+            } catch (err) {
+                alert('خطأ في تحميل البيانات: ' + err.message);
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // Auto-fill price when product changes
+        document.getElementById('product').addEventListener('change', function() {
+            // Only auto-fill if not editing, or if editing and user actively changes product
+            const selectedProduct = this.value;
+            if (productsMap[selectedProduct]) {
+                document.getElementById('price').value = productsMap[selectedProduct];
+            } else {
+                document.getElementById('price').value = '';
+            }
+        });
+
+        function showNotification() {
+            const notif = document.getElementById('notification');
+            notif.classList.add('show');
+            setTimeout(() => {
+                notif.classList.remove('show');
+            }, 2000);
+        }
+
+        // Handle form submission via Telegram MainButton
+        tg.onEvent('mainButtonClicked', async () => {
+            const customer = document.getElementById('customer').value;
+            const product = document.getElementById('product').value;
+            const price = document.getElementById('price').value;
+            const notes = document.getElementById('notes').value;
+
+            if (!customer || !product || !price) {
+                tg.showAlert('يرجى تعبئة الحقول الأساسية (الزبون، المنتج، السعر)');
+                return;
+            }
+
+            // Show loading state on MainButton
+            tg.MainButton.showProgress();
+
+            try {
+                const reqBody = {
+                    customerName: customer,
+                    productName: product,
+                    price: price,
+                    notes: notes
+                };
+                if (editId) reqBody.editId = editId;
+
+                const response = await fetch('/api/tg-app/sales', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(reqBody)
+                });
+
+                const result = await response.json();
+                
+                tg.MainButton.hideProgress();
+
+                if (result.success) {
+                    showNotification();
+                    // Close the app after 1 second
+                    setTimeout(() => {
+                        tg.close();
+                    }, 1000);
+                } else {
+                    tg.showAlert('خطأ: ' + result.error);
+                }
+            } catch (err) {
+                tg.MainButton.hideProgress();
+                tg.showAlert('فشل الاتصال بالخادم.');
+            }
+        });
+
+        // Initialize App
+        loadData();
+    </script>
+</body>
+</html>
