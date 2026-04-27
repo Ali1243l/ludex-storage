@@ -263,6 +263,8 @@ app.post('/api/telegram-webhook', async (req, res) => {
   
   if (req.body && req.body.message) {
     await handleTelegramMessage(req.body.message);
+  } else if (req.body && req.body.edited_message) {
+    await handleTelegramMessage(req.body.edited_message);
   } else if (bot) {
     bot.processUpdate(req.body); // fallback for inline actions etc, fire and forget
   }
@@ -928,12 +930,10 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
     const baghdadTime = new Date(Date.now() + (3 * 60 * 60 * 1000));
     const dateStr = baghdadTime.toISOString().split('T')[0];
     
-    // 1. معالجة الملاحظات (Notes) بشكل صارم
+    // 1. معالجة الملاحظات (Notes)
     let strictNotes = '';
     if (session.data.notes) {
-        const linesStr = typeof session.data.notes === 'string' ? session.data.notes : '';
-        const lines = linesStr.split('\n');
-        strictNotes = lines.filter(line => line.includes('ملاحظة:') || line.includes('ملاحظات:')).join('\n').trim();
+        strictNotes = typeof session.data.notes === 'string' ? session.data.notes.trim() : '';
     }
 
     // 2. التحقق من الزبون (Customer Lookup & Creation)
@@ -1681,7 +1681,11 @@ export async function handleTelegramMessage(msg: any) {
                    return;
                }
                const customer = parseCustomer(customerStr);
-               const notes = notesArr.join('\n');
+               let notes = notesArr.join('\n');
+               // إزالة جملة "هذه الرسالة هي رد على" من الملاحظات إن وجدت
+               if (notes.includes('(هذه الرسالة هي رد على:')) {
+                   notes = notes.split('(هذه الرسالة هي رد على:')[0].trim();
+               }
                
                const quickSession: UserState = {
                    step: UserStep.IDLE,
@@ -1708,7 +1712,33 @@ export async function handleTelegramMessage(msg: any) {
       return;
     }
 
-    const session = userSessions.get(userId);
+    let session = userSessions.get(userId);
+
+    // Vercel Stateless Webhook Session Recovery
+    if (!session || session.step === UserStep.IDLE) {
+        if (msg.reply_to_message && msg.reply_to_message.text) {
+             const productMatch = msg.reply_to_message.text.match(/المنتج المختار:\s*(.+)/);
+             if (productMatch && msg.reply_to_message.text.includes('أرسل الآن التفاصيل')) {
+                 const recoveredProduct = productMatch[1].trim();
+                 session = {
+                     step: UserStep.AWAITING_SALE_DETAILS,
+                     data: { productName: recoveredProduct }
+                 };
+                 userSessions.set(userId, session);
+                 console.log("Recovered session for user", userId, "Product:", recoveredProduct);
+             }
+        }
+    }
+
+    // Heuristic Check for lost session details
+    if (!session || session.step === UserStep.IDLE) {
+        const lines = text.split('\n').map(p => p.trim()).filter(p => !!p);
+        if (lines.length >= 2 && !isNaN(parsePrice(lines[0])) && !text.startsWith('إضافة') && !text.startsWith('بيع') && !text.startsWith('/')) {
+            await bot?.sendMessage(chatId, '⚠️ يبدو أنك تحاول إدخال تفاصيل مبيعة (سعر واسم) ولكن الذاكرة المؤقتة للبوت فُقدت بسبب إعادة تشغيل السيرفر.\nيرجى البدء من جديد عبر قائمة "إضافة مبيعة" واختيار المنتج، ثم **الرد (Reply)** على رسالة البوت لتجنب هذه المشكلة مستقبلاً، أو كتابة التفاصيل مباشرة بشكل كامل:\n(بيع\\nالمنتج\\nالسعر\\nالزبون).');
+            return;
+        }
+    }
+
     if (session && session.step !== UserStep.IDLE) {
         if (session.step === UserStep.AWAITING_CUSTOM_PRODUCT || session.step === UserStep.AWAITING_PRODUCT) {
              session.data.productName = text;
@@ -1731,7 +1761,11 @@ export async function handleTelegramMessage(msg: any) {
                  }
                  const customerStr = parts[1];
                  const customer = parseCustomer(customerStr);
-                 const notes = parts.slice(2).join('\n');
+                 let notes = parts.slice(2).join('\n');
+                 // إزالة جملة "هذه الرسالة هي رد على" من الملاحظات إن وجدت
+                 if (notes.includes('(هذه الرسالة هي رد على:')) {
+                     notes = notes.split('(هذه الرسالة هي رد على:')[0].trim();
+                 }
                  
                  session.data.price = price;
                  session.data.customerName = customer.name;
