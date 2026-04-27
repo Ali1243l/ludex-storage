@@ -4,6 +4,12 @@
       "maxDuration": 60
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/daily-report",
+      "schedule": "0 21 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",

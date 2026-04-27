@@ -264,9 +264,7 @@ app.post('/api/telegram-webhook', async (req, res) => {
   if (req.body && req.body.message) {
     await handleTelegramMessage(req.body.message);
   } else if (bot) {
-    try {
-      await bot.processUpdate(req.body); // fallback for inline actions etc, fire and forget
-    } catch (err) {}
+    bot.processUpdate(req.body); // fallback for inline actions etc, fire and forget
   }
   
   res.sendStatus(200);
@@ -1306,91 +1304,115 @@ function startTelegramBot() {
         await bot?.answerCallbackQuery(query.id, { text: 'حدث خطأ: ' + err.message, show_alert: true }).catch(()=> {});
       }
     });
+  } // if bot 
+
+  console.log('Telegram bot started successfully!');
+} // end startTelegramBot
+
+export async function executeDailyCron() {
+  if (!supabase) {
+    console.log('Supabase is not initialized. Skipping daily report.');
+    return;
+  }
+  
+  // Populate activeChatIds with ALLOWED_CHAT_IDS to ensure stateless delivery on Vercel
+  const allowedIdsStr = process.env.ALLOWED_CHAT_IDS || process.env.ALLOWED_CHAT_ID;
+  if (allowedIdsStr) {
+      allowedIdsStr.split(',').forEach(idStr => {
+          const id = parseInt(idStr.trim(), 10);
+          if (!isNaN(id)) activeChatIds.add(id);
+      });
   }
 
-  // إعداد التقرير اليومي التلقائي الساعة 12 منتصف الليل بتوقيت بغداد
-  cron.schedule('0 0 * * *', async () => {
-    if (activeChatIds.size === 0 || !bot) return;
+  if (activeChatIds.size === 0) {
+      console.log('No active chat IDs to send daily report to.');
+      return;
+  }
 
+  console.log('Generating daily report...');
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+  
+  const startISO = startOfDay.toISOString();
+  const endISO = endOfDay.toISOString();
+
+  // جلب البيانات الجديدة خلال اليوم الحالي بصرامة
+  const [newSales, newTransactions, newCustomers] = await Promise.all([
+    supabase.from('sales').select('productName, price, date, customerName').gte('created_at', startISO).lte('created_at', endISO),
+    supabase.from('transactions').select('type, amount, date, description').gte('created_at', startISO).lte('created_at', endISO),
+    supabase.from('customers').select('name, username, customer_number').gte('created_at', startISO).lte('created_at', endISO).then((res: any) => res).catch(() => ({ data: [] }))
+  ]);
+
+  const salesData = newSales.data || [];
+  const transData = newTransactions.data || [];
+  const custData = newCustomers.data || [];
+
+  // إذا لم تكن هناك أي تغييرات، لا نرسل التقرير
+  if (salesData.length === 0 && transData.length === 0 && custData.length === 0) {
+    console.log('No changes in the last 24 hours. Skipping report.');
+    return;
+  }
+
+  const context = `
+  أنت مساعد ذكي لمتجر Ludex Store.
+  قم بكتابة تقرير يومي مفصل لصاحب المتجر عن التغييرات التي حدثت في آخر 24 ساعة.
+  تحدث بلهجة عراقية محترمة وودودة.
+  
+  البيانات الجديدة في آخر 24 ساعة:
+  - المبيعات الجديدة (${salesData.length} مبيعات): ${JSON.stringify(salesData)}
+  - المعاملات المالية (${transData.length} معاملات): ${JSON.stringify(transData)}
+  - الزبائن الجدد (${custData.length} زبائن): ${JSON.stringify(custData)}
+  
+  اكتب التقرير بشكل مرتب، واذكر إجمالي المبيعات (اجمع الأسعار)، وأهم الحركات. استخدم الإيموجي المناسبة.
+  `;
+
+  const modelsToTry = getModelsToTry();
+  let response;
+  const ai = getAiClient();
+
+  for (let i = 0; i < modelsToTry.length; i++) {
     try {
-      if (!supabase) {
-        console.log('Supabase is not initialized. Skipping daily report.');
-        return;
-      }
-
-      console.log('Generating daily report...');
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date();
-      endOfDay.setHours(23, 59, 59, 999);
-      
-      const startISO = startOfDay.toISOString();
-      const endISO = endOfDay.toISOString();
-
-      // جلب البيانات الجديدة خلال اليوم الحالي بصرامة
-      const [newSales, newTransactions, newCustomers] = await Promise.all([
-        supabase.from('sales').select('productName, price, date, customerName').gte('created_at', startISO).lte('created_at', endISO),
-        supabase.from('transactions').select('type, amount, date, description').gte('created_at', startISO).lte('created_at', endISO),
-        supabase.from('customers').select('name, username, customer_number').gte('created_at', startISO).lte('created_at', endISO).then((res: any) => res).catch(() => ({ data: [] }))
-      ]);
-
-      const salesData = newSales.data || [];
-      const transData = newTransactions.data || [];
-      const custData = newCustomers.data || [];
-
-      // إذا لم تكن هناك أي تغييرات، لا نرسل التقرير
-      if (salesData.length === 0 && transData.length === 0 && custData.length === 0) {
-        console.log('No changes in the last 24 hours. Skipping report.');
-        return;
-      }
-
-      const context = `
-      أنت مساعد ذكي لمتجر Ludex Store.
-      قم بكتابة تقرير يومي مفصل لصاحب المتجر عن التغييرات التي حدثت في آخر 24 ساعة.
-      تحدث بلهجة عراقية محترمة وودودة.
-      
-      البيانات الجديدة في آخر 24 ساعة:
-      - المبيعات الجديدة (${salesData.length} مبيعات): ${JSON.stringify(salesData)}
-      - المعاملات المالية (${transData.length} معاملات): ${JSON.stringify(transData)}
-      - الزبائن الجدد (${custData.length} زبائن): ${JSON.stringify(custData)}
-      
-      اكتب التقرير بشكل مرتب، واذكر إجمالي المبيعات (اجمع الأسعار)، وأهم الحركات. استخدم الإيموجي المناسبة.
-      `;
-
-      const modelsToTry = getModelsToTry();
-      let response;
-      const ai = getAiClient();
-
-      for (let i = 0; i < modelsToTry.length; i++) {
-        try {
-          response = await ai.models.generateContent({
-            model: modelsToTry[i],
-            contents: context,
-            config: {
-              systemInstruction: "أنت مساعد ذكي لمتجر Ludex Store. اكتب تقريراً يومياً بلهجة عراقية بناءً على البيانات.",
-            }
-          });
-          break; // Success
-        } catch (err: any) {
-          if (i === modelsToTry.length - 1) throw err;
-          console.warn(`Model ${modelsToTry[i]} failed for daily report, trying next... Error: ${err.message}`);
+      response = await ai.models.generateContent({
+        model: modelsToTry[i],
+        contents: context,
+        config: {
+          systemInstruction: "أنت مساعد ذكي لمتجر Ludex Store. اكتب تقريراً يومياً بلهجة عراقية بناءً على البيانات.",
         }
-      }
+      });
+      break; // Success
+    } catch (err: any) {
+      if (i === modelsToTry.length - 1) throw err;
+      console.warn(`Model ${modelsToTry[i]} failed for daily report, trying next... Error: ${err.message}`);
+    }
+  }
 
-      const reportText = response?.text || 'عذراً، لم أتمكن من توليد التقرير اليومي.';
+  const reportText = response?.text || 'عذراً، لم أتمكن من توليد التقرير اليومي.';
 
+  // Ensure bot is initialized
+  if (!bot && process.env.TELEGRAM_BOT_TOKEN) {
+      bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
+  }
+
+  if (bot) {
       for (const chatId of activeChatIds) {
         await bot.sendMessage(chatId, `📊 التقرير اليومي التلقائي 📊\n\n${reportText}`);
       }
-    } catch (error) {
-      console.error('Error generating daily report:', error);
-    }
-  }, {
-    timezone: "Asia/Baghdad"
-  });
+  }
+}
 
-  console.log('Telegram bot started successfully!');
-} // قفل دالة startTelegramBot
+// Endpoint for Vercel Cron
+app.all('/api/cron/daily-report', async (req, res) => {
+    console.log('Vercel Cron Triggered: /api/cron/daily-report');
+    try {
+        await executeDailyCron();
+        res.status(200).json({ success: true, message: 'Daily report sent successfully.' });
+    } catch(err: any) {
+        console.error('Cron job error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 const processedMessages = new Set<number>();
 
@@ -1507,6 +1529,50 @@ export async function handleTelegramMessage(msg: any) {
     if (text === '/report' || text === 'تقرير') {
         const reportText = await generateTodayReport();
         await bot?.sendMessage(chatId, reportText);
+        return;
+    }
+
+    if (text === '/testcron') {
+        await bot?.sendMessage(chatId, '⏳ جاري توليد تقرير الـ 24 ساعة (نفس التلقائي)...');
+        try {
+            if (!supabase) throw new Error('لا توجد قاعدة بيانات');
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date();
+            endOfDay.setHours(23, 59, 59, 999);
+            
+            const startISO = startOfDay.toISOString();
+            const endISO = endOfDay.toISOString();
+            
+            const [newSales, newTransactions, newCustomers] = await Promise.all([
+                supabase.from('sales').select('productName, price, date, customerName').gte('created_at', startISO).lte('created_at', endISO),
+                supabase.from('transactions').select('type, amount, date, description').gte('created_at', startISO).lte('created_at', endISO),
+                supabase.from('customers').select('name, username, customer_number').gte('created_at', startISO).lte('created_at', endISO).then((res: any) => res).catch(() => ({ data: [] }))
+            ]);
+            
+            const context = `
+            أنت مساعد ذكي لمتجر Ludex Store.
+            قم بكتابة تقرير يومي مفصل لصاحب المتجر عن التغييرات التي حدثت في آخر 24 ساعة.
+            تحدث بلهجة عراقية محترمة وودودة.
+            
+            البيانات الجديدة في آخر 24 ساعة:
+            - المبيعات الجديدة (${newSales.data?.length || 0} مبيعات): ${JSON.stringify(newSales.data || [])}
+            - المعاملات المالية (${newTransactions.data?.length || 0} معاملات): ${JSON.stringify(newTransactions.data || [])}
+            - الزبائن الجدد (${newCustomers.data?.length || 0} زبائن): ${JSON.stringify(newCustomers.data || [])}
+            
+            اكتب التقرير بشكل مرتب، واذكر إجمالي المبيعات (اجمع الأسعار)، وأهم الحركات. استخدم الإيموجي المناسبة.
+            `;
+            
+            const ai = getAiClient();
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: context,
+                config: { systemInstruction: "أنت مساعد ذكي لمتجر Ludex Store. اكتب تقريراً يومياً بلهجة عراقية بناءً على البيانات." }
+            });
+            await bot?.sendMessage(chatId, `📊 التقرير اليومي التلقائي (تجربة) 📊\n\n${response?.text}`);
+        } catch (err: any) {
+             await bot?.sendMessage(chatId, '❌ خطأ: ' + err.message);
+        }
         return;
     }
 
