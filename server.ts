@@ -914,6 +914,8 @@ export enum UserStep {
   EDIT_AWAITING_PRODUCT = "EDIT_AWAITING_PRODUCT",
   EDIT_AWAITING_PRICE = "EDIT_AWAITING_PRICE",
   EDIT_AWAITING_NOTES = "EDIT_AWAITING_NOTES",
+  AWAITING_ACCOUNT_DETAILS = "AWAITING_ACCOUNT_DETAILS",
+  AWAITING_PRODUCT_DETAILS = "AWAITING_PRODUCT_DETAILS"
 }
 
 export interface UserState {
@@ -1084,14 +1086,26 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
         receiptText += `\n\n---\n✅ معلومات الزبون (سهلة النسخ):\nالاسم: \`${finalCustInfo.name}\`\nعدد مرات الشراء: \`${finalCustInfo.purchase_count || 1}\`\nكود الزبون: \`${finalCustInfo.customer_code}\`\nالمبلغ الكلي: \`${finalCustInfo.total_spent || session.data.price}\``;
     }
 
-    await bot?.sendMessage(chatId, receiptText, {
-        parse_mode: 'Markdown',
-        reply_markup: {
-            inline_keyboard: [
-               [{ text: '✏️ تعديل', callback_data: `edit_sale_${saleId}` }, { text: '🗑️ حذف', callback_data: `delete_sale_${saleId}` }]
-            ]
-        }
-    });
+    try {
+        await bot?.sendMessage(chatId, receiptText, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [
+                   [{ text: '✏️ تعديل', callback_data: `edit_sale_${saleId}` }, { text: '🗑️ حذف', callback_data: `delete_sale_${saleId}` }]
+                ]
+            }
+        });
+    } catch (err: any) {
+        console.error('Failed to send receipt with Markdown, sending without it:', err);
+        const fallbackText = receiptText.replace(/`/g, '');
+        await bot?.sendMessage(chatId, fallbackText, {
+            reply_markup: {
+                inline_keyboard: [
+                   [{ text: '✏️ تعديل', callback_data: `edit_sale_${saleId}` }, { text: '🗑️ حذف', callback_data: `delete_sale_${saleId}` }]
+                ]
+            }
+        }).catch(e => console.error('Even fallback message failed:', e));
+    }
     
     userSessions.delete(userId);
 }
@@ -1207,10 +1221,12 @@ function startTelegramBot() {
           await bot?.sendMessage(chatId, reportText);
         }
         else if (data === 'add_account_help') {
-          await bot?.sendMessage(chatId, 'أرسل تفاصيل الحساب كالتالي:\n\nإضافة حساب\nاسم الحساب\nالتصنيف\nتاريخ التفعيل\nتاريخ الانتهاء\nاليوزر - الباسورد\nالملاحظات');
+           userSessions.set(userId, { step: UserStep.AWAITING_ACCOUNT_DETAILS, data: {} });
+           await bot?.sendMessage(chatId, 'أرسل تفاصيل الحساب كالتالي دفعة واحدة:\n\nاسم الحساب\nالتصنيف\nتاريخ التفعيل (اختياري)\nتاريخ الانتهاء (اختياري)\nاليوزر - الباسورد\nالسعر\nالملاحظات');
         }
         else if (data === 'add_product_help') {
-          await bot?.sendMessage(chatId, 'أرسل تفاصيل المنتج كالتالي:\n\nإضافة منتج\nاسم المنتج\nسعر البيع\nسعر التكلفة\nالتصنيف\nالكمية في المخزن');
+           userSessions.set(userId, { step: UserStep.AWAITING_PRODUCT_DETAILS, data: {} });
+           await bot?.sendMessage(chatId, 'أرسل تفاصيل المنتج كالتالي دفعة واحدة:\n\nاسم المنتج\nسعر البيع\nسعر التكلفة\nالتصنيف\nالكمية في المخزن');
         }
         else if (data === 'start_sale_wizard') {
            if (!supabase) throw new Error('Database not connected');
@@ -1356,16 +1372,16 @@ export async function executeDailyCron() {
   }
 
   const context = `
-  أنت مساعد ذكي لمتجر Ludex Store.
-  قم بكتابة تقرير يومي مفصل لصاحب المتجر عن التغييرات التي حدثت في آخر 24 ساعة.
-  تحدث بلهجة عراقية محترمة وودودة.
-  
-  البيانات الجديدة في آخر 24 ساعة:
-  - المبيعات الجديدة (${salesData.length} مبيعات): ${JSON.stringify(salesData)}
-  - المعاملات المالية (${transData.length} معاملات): ${JSON.stringify(transData)}
-  - الزبائن الجدد (${custData.length} زبائن): ${JSON.stringify(custData)}
-  
-  اكتب التقرير بشكل مرتب، واذكر إجمالي المبيعات (اجمع الأسعار)، وأهم الحركات. استخدم الإيموجي المناسبة.
+  اكتب ملخص سريع جداً وبدون لغوة زايدة لمبيعات آخر 24 ساعة لمتجر Ludex.
+  المطلوب:
+  1. إجمالي المبيعات (رقم فقط).
+  2. عدد المبيعات والحسابات والزبائن الجدد.
+  3. نقطتين لأهم الصفقات (إذا اكو).
+  لا تكتب مقدمات وخواتيم طويلة. استخدم أسلوب واتساب سريع ومباشر.
+  البيانات:
+  - المبيعات (${salesData.length}): ${JSON.stringify(salesData)}
+  - المعاملات (${transData.length}): ${JSON.stringify(transData)}
+  - الزبائن (${custData.length}): ${JSON.stringify(custData)}
   `;
 
   const modelsToTry = getModelsToTry();
@@ -1378,7 +1394,7 @@ export async function executeDailyCron() {
         model: modelsToTry[i],
         contents: context,
         config: {
-          systemInstruction: "أنت مساعد ذكي لمتجر Ludex Store. اكتب تقريراً يومياً بلهجة عراقية بناءً على البيانات.",
+          systemInstruction: "أنت مدير مالي صارم وسريع. تعطي الزبدة والأرقام فقط باللهجة العراقية بدون مقدمات ولا كلام زايد.",
         }
       });
       break; // Success
@@ -1452,9 +1468,13 @@ export async function handleTelegramMessage(msg: any) {
     const isCommand = messageContent.startsWith('/');
     const isUserInSession = userSessions.has(msg.from.id);
 
+    // Heuristics to check if it looks like a sale detail message (number on first line, at least 2 lines)
+    const linesCheck = messageContent.split('\n').map((p: any) => p.trim()).filter((p: any) => !!p);
+    const looksLikeSaleDetails = linesCheck.length >= 2 && !isNaN(parsePrice(linesCheck[0])) && !messageContent.startsWith('إضافة') && !messageContent.startsWith('بيع') && !messageContent.startsWith('/');
+
     // 1. بالخاص ما يحتاج منشن، بالكروب يحتاج منشن او ريبلاي
     // إذا الرسالة مو للبوت، تجاهلها بصمت تام (بدون رسالة خطأ)
-    if (!messageContent || (!isPrivate && !isMention && !isReplyToBot && !isCommand && !isUserInSession)) {
+    if (!messageContent || (!isPrivate && !isMention && !isReplyToBot && !isCommand && !isUserInSession && !looksLikeSaleDetails)) {
         console.log(`Dropped message: No mention of ${BOT_USERNAME} and not a reply to bot.`);
         return;
     }
@@ -1551,23 +1571,24 @@ export async function handleTelegramMessage(msg: any) {
             ]);
             
             const context = `
-            أنت مساعد ذكي لمتجر Ludex Store.
-            قم بكتابة تقرير يومي مفصل لصاحب المتجر عن التغييرات التي حدثت في آخر 24 ساعة.
-            تحدث بلهجة عراقية محترمة وودودة.
+            اكتب ملخص سريع جداً وبدون لغوة زايدة لمبيعات آخر 24 ساعة لمتجر Ludex.
+            المطلوب:
+            1. إجمالي المبيعات (رقم فقط).
+            2. عدد المبيعات والحسابات والزبائن الجدد.
+            3. نقطتين لأهم الصفقات (إذا اكو).
+            لا تكتب مقدمات وخواتيم طويلة. استخدم أسلوب واتساب سريع ومباشر.
             
-            البيانات الجديدة في آخر 24 ساعة:
-            - المبيعات الجديدة (${newSales.data?.length || 0} مبيعات): ${JSON.stringify(newSales.data || [])}
-            - المعاملات المالية (${newTransactions.data?.length || 0} معاملات): ${JSON.stringify(newTransactions.data || [])}
-            - الزبائن الجدد (${newCustomers.data?.length || 0} زبائن): ${JSON.stringify(newCustomers.data || [])}
-            
-            اكتب التقرير بشكل مرتب، واذكر إجمالي المبيعات (اجمع الأسعار)، وأهم الحركات. استخدم الإيموجي المناسبة.
+            البيانات:
+            - المبيعات (${newSales.data?.length || 0}): ${JSON.stringify(newSales.data || [])}
+            - المعاملات (${newTransactions.data?.length || 0}): ${JSON.stringify(newTransactions.data || [])}
+            - الزبائن (${newCustomers.data?.length || 0}): ${JSON.stringify(newCustomers.data || [])}
             `;
             
             const ai = getAiClient();
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: context,
-                config: { systemInstruction: "أنت مساعد ذكي لمتجر Ludex Store. اكتب تقريراً يومياً بلهجة عراقية بناءً على البيانات." }
+                config: { systemInstruction: "أنت مدير مالي صارم وسريع. تعطي الزبدة والأرقام فقط باللهجة العراقية بدون مقدمات ولا كلام زايد." }
             });
             await bot?.sendMessage(chatId, `📊 التقرير اليومي التلقائي (تجربة) 📊\n\n${response?.text}`);
         } catch (err: any) {
@@ -1730,11 +1751,11 @@ export async function handleTelegramMessage(msg: any) {
         }
     }
 
-    // Heuristic Check for lost session details
+    // Heuristic Check for lost session details OR un-replied messages
     if (!session || session.step === UserStep.IDLE) {
         const lines = text.split('\n').map(p => p.trim()).filter(p => !!p);
         if (lines.length >= 2 && !isNaN(parsePrice(lines[0])) && !text.startsWith('إضافة') && !text.startsWith('بيع') && !text.startsWith('/')) {
-            await bot?.sendMessage(chatId, '⚠️ يبدو أنك تحاول إدخال تفاصيل مبيعة (سعر واسم) ولكن الذاكرة المؤقتة للبوت فُقدت بسبب إعادة تشغيل السيرفر.\nيرجى البدء من جديد عبر قائمة "إضافة مبيعة" واختيار المنتج، ثم **الرد (Reply)** على رسالة البوت لتجنب هذه المشكلة مستقبلاً، أو كتابة التفاصيل مباشرة بشكل كامل:\n(بيع\\nالمنتج\\nالسعر\\nالزبون).');
+            await bot?.sendMessage(chatId, '⚠️ عذراً عزيزي، ما كدرت أسجل هاي المبيعة لسببين محتملين:\n1. إما الذاكرة المؤقتة تصفرت (السيرفر ترست).\n2. أو أنك **ما سويت رد (Reply)** على رسالة البوت اللي بيها "أرسل التفاصيل".\n\n📌 **الحل:**\nاختار المنتج من القائمة مرة ثانية، ومن يطلب البوت التفاصيل: **اضغط على رسالة البوت وسوي (رد/Reply)** واكتب التفاصيل.\n\nأو للسرعة، اكتب المبيعة كلها برسالة وحدة هيج:\nبيع\nالمنتج\nالسعر\nالزبون');
             return;
         }
     }
@@ -1876,6 +1897,33 @@ export async function handleTelegramMessage(msg: any) {
              } catch (err: any) {
                 await bot?.sendMessage(chatId, 'خطأ: ' + err.message);
              }
+             return;
+        }
+
+        if (session.step === UserStep.AWAITING_ACCOUNT_DETAILS) {
+             text = "هذه تفاصيل اشتراك/حساب جديد (subscriptions) يرجى تسجيله بدقة كاشتراك حصراً وليس كمبيعة أبداً. التفاصيل: \n" + text;
+             userSessions.delete(userId);
+             // Skip return to fall through to AI
+        } else if (session.step === UserStep.AWAITING_PRODUCT_DETAILS) {
+             const parts = text.split('\n').map(p => p.trim()).filter(p => !!p);
+             if (parts.length >= 2) {
+                 const name = parts[0];
+                 const sellingPrice = Number(parts[1].replace(/[^\d.]/g, '')) || 0;
+                 const costPrice = parts.length > 2 ? Number(parts[2].replace(/[^\d.]/g, '')) : 0;
+                 const category = parts.length > 3 ? parts[3] : 'عام';
+                 let stock = null;
+                 if (parts.length > 4 && parts[4]) stock = Number(parts[4].replace(/[^\d]/g, ''));
+                 
+                 if (supabase) {
+                     const insertData: any = { name, sellingPrice, costPrice, category };
+                     if (stock !== null) insertData.stockAmount = stock;
+                     await supabase.from('products').insert([insertData]).catch(()=>{});
+                     await bot?.sendMessage(chatId, `✅ تم إضافة المنتج بنجاح.\nالاسم: ${name}\nالسعر: ${sellingPrice}`);
+                 }
+             } else {
+                 await bot?.sendMessage(chatId, '❌ الصيغة غير صحيحة. يرجى البدء من جديد عبر قائمة (إضافة منتج).');
+             }
+             userSessions.delete(userId);
              return;
         }
     }
