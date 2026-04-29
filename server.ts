@@ -498,9 +498,9 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
   const [customers, products, sales, transactions, subscriptions] = await Promise.all([
     supabase.from('customers').select('name, username, customer_number').order('customer_number', { ascending: false }).limit(5),
     supabase.from('products').select('name, sellingPrice, costPrice'),
-    supabase.from('sales').select('id, productName, price, date, customerName, notes').order('date', { ascending: false }).limit(20),
-    supabase.from('transactions').select('id, type, amount, date, description, person').order('date', { ascending: false }).limit(20),
-    supabase.from('subscriptions').select('id, name, category, account_username, account_password, notes').order('id', { ascending: false }).limit(20).then((res: any) => res).catch(() => ({ data: [] }))
+    supabase.from('sales').select('id, productName, price, date, customerName, notes').order('created_at', { ascending: false }).limit(20),
+    supabase.from('transactions').select('id, type, amount, date, description, person').order('created_at', { ascending: false }).limit(20),
+    supabase.from('subscriptions').select('id, name, category, account_username, account_password, notes').order('activationDate', { ascending: false }).limit(50).then((res: any) => res).catch(() => ({ data: [] }))
   ]);
   
   const systemInstruction = `
@@ -552,11 +552,11 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
     "action": "modify_record",
     "operation": "delete" للحذف أو "update" للتعديل,
     "table": "sales" أو "transactions" أو "subscriptions",
-    "target_id": "رقم الـ id الدقيق من البيانات المرفقة - ابحث بذكاء عن السجل المقصود ولا تضع نصاً وهمياً",
+    "target_id": "انسخ الـ id (UUID) الخاص بالسجل من البيانات المرفقة كما هو حرفياً وبدون أي تغييرات",
     "update_data": {} // الحقول والقيم الجديدة للتعديل فقط بالصيغة الصحيحة. مثلاً إذا طلب دمج ملاحظة، ادمجها مع الملاحظة المرفقة ببيانات هذا ID وضع النتيجة هنا. 
   }
   ملاحظة هامة جداً: إذا طلب المدير تعديلاً (مثلاً "خلي الملاحظة انباع سويج") يجب أن تقرأ السجل الموجود ضمن "البيانات الحالية" وتعرف محتواه وتصنع "update_data" متكامل. 
-  إذا لم تتمكن من استنتاج الـ id الدقيق للسجل من البيانات المرفقة أو سياق الرد، لا تخمن ID أبداً، بل اختر "reply" واطلب منه توضيح أو تحديد السجل بريبلاي.
+  إذا لم تتمكن من العثور على السجل في البيانات المرفقة، لا تخمن ID أبداً كأن تضع رقماً عشوائياً، بل رد بـ "reply" واطلب منه توضيح أو تحديد السجل.
 
   للإجابة عن أسئلة أو تلخيص (reply):
   {
@@ -607,7 +607,7 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
     textT = textT.replace(/```json\n?/ig, '').replace(/```\n?/g, '').trim();
   }
 
-  let parsed = {};
+  let parsed: any = {};
   try {
     parsed = JSON.parse(textT || "{}");
   } catch (err) {
@@ -784,8 +784,9 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
     if (parsed.operation === 'delete') {
       if (parsed.table === 'sales') {
          const { data: saleToDel } = await supabase.from('sales').select('*').eq('id', parsed.target_id).single();
-         const { error } = await supabase.from('sales').delete().eq('id', parsed.target_id);
+         const { data: deletedSale, error } = await supabase.from('sales').delete().eq('id', parsed.target_id).select('id');
          if (error) return `❌ صار خطأ بالحذف: ${error.message}`;
+         if (!deletedSale || deletedSale.length === 0) return `⚠️ دزيت امر الحذف بس المبيعة مموجودة (يمكن الـ ID غلط أو انحذفت مسبقاً).`;
 
          if (saleToDel) {
             const price = Number(saleToDel.price) || 0;
@@ -816,8 +817,9 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
          }
          return `✅ تم الحذف من المبيعات والقوائم المرتبطة بنجاح!`;
       } else {
-         const { error } = await supabase.from(parsed.table).delete().eq('id', parsed.target_id);
+         const { data, error } = await supabase.from(parsed.table).delete().eq('id', parsed.target_id).select('id');
          if (error) return `❌ صار خطأ بالحذف: ${error.message}`;
+         if (!data || data.length === 0) return `⚠️ دزيت امر الحذف بس السجل مموجود بهالـ ID، حاول توضح أكثر أو تسوي ريبلاي للسجل اللي تريده.`;
          return `✅ تم الحذف بنجاح!`;
       }
     } else if (parsed.operation === 'update' && parsed.update_data) {
