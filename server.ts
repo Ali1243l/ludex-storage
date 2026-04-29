@@ -1279,7 +1279,12 @@ function startTelegramBot() {
         }
         else if (data === 'accounts_pull') {
             if (!supabase) throw new Error('Database not connected');
-            const { data: subs } = await supabase.from('subscriptions').select('name').order('name');
+            const { data: subs, error } = await supabase.from('subscriptions').select('name').order('name');
+            if (error) {
+                 console.error("Supabase Error picking subs list:", error);
+                 await bot?.sendMessage(chatId, `❌ خطأ في جلب الحسابات: ${error.message}`);
+                 return;
+            }
             if (!subs || subs.length === 0) {
                  await bot?.sendMessage(chatId, '❌ لا توجد حسابات متوفرة.');
                  return;
@@ -1288,9 +1293,11 @@ function startTelegramBot() {
             const keyboard = [];
             for (let i=0; i<uniqueNames.length; i+=2) {
                 const row = [];
-                row.push({ text: uniqueNames[i] as string, callback_data: `pull_acc_${uniqueNames[i]}` });
+                const name1 = uniqueNames[i] as string;
+                row.push({ text: name1, callback_data: `pull_acc_${name1.substring(0, 20)}` });
                 if (i+1 < uniqueNames.length) {
-                    row.push({ text: uniqueNames[i+1] as string, callback_data: `pull_acc_${uniqueNames[i+1]}` });
+                    const name2 = uniqueNames[i+1] as string;
+                    row.push({ text: name2, callback_data: `pull_acc_${name2.substring(0, 20)}` });
                 }
                 keyboard.push(row);
             }
@@ -1302,25 +1309,58 @@ function startTelegramBot() {
             });
         }
         else if (data.startsWith('pull_acc_')) {
-            const accName = data.replace('pull_acc_', '');
+            const safeName = data.replace('pull_acc_', '');
             if (!supabase) throw new Error('Database not connected');
-            const { data: accounts } = await supabase.from('subscriptions')
-                .select('*')
-                .eq('name', accName)
-                .order('created_at', { ascending: true })
-                .limit(1);
-                
-            if (!accounts || accounts.length === 0) {
-                await bot?.sendMessage(chatId, `❌ لا يوجد أي حساب متاح لـ ${accName} حالياً.`);
-            } else {
-                const acc = accounts[0];
-                const msgText = `📥 **تم سحب حساب بنجاح:**\n\n📌 **المنتج:** ${acc.name}\n` +
-                                `👤 **اليوزر/الإيميل:** \`${acc.account_username || 'لا يوجد'}\`\n` +
-                                `🔑 **الباسورد:** \`${acc.account_password || 'لا يوجد'}\`\n` +
-                                (acc.notes ? `📝 **ملاحظات:** ${acc.notes}\n` : '') +
-                                `\n*(اضغط على اليوزر أو الباسورد للنسخ المباشر)*`;
-                await bot?.sendMessage(chatId, msgText, { parse_mode: 'Markdown' });
+            
+            try {
+                const { data: accounts, error } = await supabase.from('subscriptions')
+                    .select('*')
+                    .ilike('name', `${safeName}%`)
+                    .order('created_at', { ascending: true })
+                    .limit(1);
+                    
+                if (error) {
+                    console.error("Supabase Error pulling individual account:", error);
+                    await bot?.sendMessage(chatId, `❌ خطأ في قاعدة البيانات عند جلب الحساب: ${error.message}`);
+                    return;
+                }
+
+                if (!accounts || accounts.length === 0) {
+                    await bot?.sendMessage(chatId, `❌ لا يوجد أي حساب متاح يطابق المطالبة حالياً.`);
+                } else {
+                    const acc = accounts[0];
+                    const msgText = `📥 **تم سحب حساب بنجاح:**\n\n📌 **المنتج:** ${acc.name}\n` +
+                                    `👤 **اليوزر/الإيميل:** \`${acc.account_username || 'لا يوجد'}\`\n` +
+                                    `🔑 **الباسورد:** \`${acc.account_password || 'لا يوجد'}\`\n` +
+                                    (acc.notes ? `📝 **ملاحظات:** ${acc.notes}\n` : '') +
+                                    `\n*(اضغط على اليوزر أو الباسورد للنسخ المباشر)*`;
+                    await bot?.sendMessage(chatId, msgText, { 
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [[{ text: '✅ تم تسليم الحساب (حذف من المخزون)', callback_data: `acc_del_${acc.id}` }]]
+                        }
+                    });
+                }
+            } catch (err: any) {
+                console.error("Unexpected error pulling account:", err);
+                await bot?.sendMessage(chatId, `❌ حدث خطأ غير متوقع: ${err.message}`);
             }
+        }
+        else if (data.startsWith('acc_del_')) {
+            const accId = data.replace('acc_del_', '');
+            if (!supabase) return;
+            const { error } = await supabase.from('subscriptions').delete().eq('id', accId);
+            if (error) {
+                console.error("Supabase Error deleting account:", error);
+                await bot?.sendMessage(chatId, `❌ خطأ في حذف الحساب بعد تسليمه: ${error.message}`);
+                return;
+            }
+            await bot?.editMessageText((query.message?.text || 'تم التسليم') + '\n\n✅ **(تم تسليمه وحذفه من المخزون)**', {
+                chat_id: chatId, 
+                message_id: query.message?.message_id,
+                parse_mode: 'Markdown',
+                reply_markup: { inline_keyboard: [] }
+            });
         }
         else if (data === 'accounts_view') {
            if (!supabase) throw new Error('Database not connected');
