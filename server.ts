@@ -1462,11 +1462,17 @@ function startTelegramBot() {
            sls.forEach((s, idx) => {
                msg += `${idx+1}. 🛍️ ${s.productName}\n💵 السعر: ${s.price}\n👤 الزبون: ${s.customerName || 'غير معروف'}\n📅 التاريخ: ${s.date || 'غير معروف'}\n🔑 ID: \`${s.id}\`\n---\n`;
            });
-           await bot?.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+           await bot?.deleteMessage(chatId, query.message?.message_id).catch(() => {});
+           await bot?.sendMessage(chatId, msg, { 
+               parse_mode: 'Markdown',
+               reply_markup: {
+                   inline_keyboard: [[{ text: '❌ إغلاق', callback_data: 'close_msg' }]]
+               }
+           });
         }
         else if (data === 'finances_income') {
            if (!supabase) return;
-           const { data: tx } = await supabase.from('transactions').select('id, amount, description, type').eq('type', 'revenue').order('created_at', { ascending: false }).limit(5);
+           const { data: tx } = await supabase.from('transactions').select('id, amount, description, type').eq('type', 'income').order('created_at', { ascending: false }).limit(5);
            let msg = `📈 **ملخص الواردات (آخر 5 حركات):**\n\n`;
            if (tx && tx.length > 0) {
                tx.forEach((t, idx) => {
@@ -1475,7 +1481,13 @@ function startTelegramBot() {
            } else {
                msg += 'لا توجد واردات مسجلة مؤخراً.';
            }
-           await bot?.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+           await bot?.deleteMessage(chatId, query.message?.message_id).catch(() => {});
+           await bot?.sendMessage(chatId, msg, { 
+               parse_mode: 'Markdown',
+               reply_markup: {
+                   inline_keyboard: [[{ text: '❌ إغلاق', callback_data: 'close_msg' }]]
+               }
+           });
         }
         else if (data === 'finances_expenses') {
            if (!supabase) return;
@@ -1488,7 +1500,13 @@ function startTelegramBot() {
            } else {
                msg += 'لا توجد مصروفات مسجلة مؤخراً.';
            }
-           await bot?.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+           await bot?.deleteMessage(chatId, query.message?.message_id).catch(() => {});
+           await bot?.sendMessage(chatId, msg, { 
+               parse_mode: 'Markdown',
+               reply_markup: {
+                   inline_keyboard: [[{ text: '❌ إغلاق', callback_data: 'close_msg' }]]
+               }
+           });
         }
         else if (data === 'finances_add_expense') {
             userSessions.set(userId, { step: UserStep.AWAITING_EXPENSE_AMOUNT, data: {} });
