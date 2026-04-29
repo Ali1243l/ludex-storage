@@ -1238,10 +1238,16 @@ function startTelegramBot() {
                     inline_keyboard: [
                         [{ text: '📂 قسم الحسابات', callback_data: 'menu_accounts' }],
                         [{ text: '🛒 قسم سجل المبيعات', callback_data: 'menu_sales' }],
-                        [{ text: '💸 قسم المالية والمصروفات', callback_data: 'menu_finances' }]
+                        [{ text: '💸 قسم المالية والمصروفات', callback_data: 'menu_finances' }],
+                        [{ text: '❌ إغلاق', callback_data: 'close_msg' }]
                     ]
                 }
-            });
+            }).catch(() => {});
+        }
+        else if (data === 'close_msg') {
+            await bot?.deleteMessage(chatId, query.message?.message_id).catch(() => {});
+            userSessions.delete(userId);
+            return;
         }
         else if (data === 'menu_accounts') {
             await bot?.editMessageText('📂 **قسم الحسابات**\nاختر الإجراء المطلوب:', {
@@ -1251,10 +1257,10 @@ function startTelegramBot() {
                         [{ text: '👁️ عرض الحسابات المتوفرة', callback_data: 'accounts_view' }],
                         [{ text: '📥 سحب حساب لتسليمه', callback_data: 'accounts_pull' }],
                         [{ text: '✏️ تعديل حساب', callback_data: 'accounts_edit_start' }, { text: '➕ إضافة حساب', callback_data: 'add_account_help' }],
-                        [{ text: '🔙 رجوع', callback_data: 'menu_main' }]
+                        [{ text: '🔙 رجوع', callback_data: 'menu_main' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]
                     ]
                 }
-            });
+            }).catch(() => {});
         }
         else if (data === 'menu_sales') {
             await bot?.editMessageText('🛒 **قسم سجل المبيعات**\nاختر الإجراء المطلوب:', {
@@ -1263,10 +1269,10 @@ function startTelegramBot() {
                     inline_keyboard: [
                         [{ text: '➕ إضافة مبيعة', callback_data: 'start_sale_wizard' }],
                         [{ text: '📜 آخر المبيعات', callback_data: 'sales_view' }, { text: '✏️ تعديل مبيعة', callback_data: 'sales_edit_start' }],
-                        [{ text: '🔙 رجوع', callback_data: 'menu_main' }]
+                        [{ text: '🔙 رجوع', callback_data: 'menu_main' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]
                     ]
                 }
-            });
+            }).catch(() => {});
         }
         else if (data === 'menu_finances') {
             await bot?.editMessageText('💸 **قسم المالية والمصروفات**\nاختر الإجراء المطلوب:', {
@@ -1275,10 +1281,10 @@ function startTelegramBot() {
                     inline_keyboard: [
                         [{ text: '📈 ملخص الواردات', callback_data: 'finances_income' }, { text: '📉 ملخص المصروفات', callback_data: 'finances_expenses' }],
                         [{ text: '➖ إضافة مصروف جديد', callback_data: 'finances_add_expense' }],
-                        [{ text: '🔙 رجوع', callback_data: 'menu_main' }]
+                        [{ text: '🔙 رجوع', callback_data: 'menu_main' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]
                     ]
                 }
-            });
+            }).catch(() => {});
         }
         else if (data === 'accounts_pull') {
             if (!supabase) throw new Error('Database not connected');
@@ -1304,12 +1310,12 @@ function startTelegramBot() {
                 }
                 keyboard.push(row);
             }
-            keyboard.push([{ text: '🔙 رجوع', callback_data: 'menu_accounts' }]);
+            keyboard.push([{ text: '🔙 رجوع', callback_data: 'menu_accounts' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]);
             
             await bot?.editMessageText('📥 **سحب حساب لتسليمه**\nاختر الاشتراك المطلوب ليتم سحب حساب واحد متاح:', {
                 chat_id: chatId, message_id: query.message?.message_id, parse_mode: 'Markdown',
                 reply_markup: { inline_keyboard: keyboard }
-            });
+            }).catch(() => {});
         }
         else if (data.startsWith('pull_acc_')) {
             const safeName = data.replace('pull_acc_', '');
@@ -1340,6 +1346,9 @@ function startTelegramBot() {
                     const currentStatus = acc.status || 'غير مباع';
                     const currentSellCount = acc.sell_count || 0;
                     
+                    // تحذف القائمة السابقة لتجنب الخبصة
+                    await bot?.deleteMessage(chatId, query.message?.message_id).catch(() => {});
+                    
                     const msgText = `📥 **تفاصيل الحساب المطلوبة:**\n\n` +
                                     `📌 **المنتج:** ${acc.name}\n` +
                                     (acc.notes ? `📝 **ملاحظات:** ${acc.notes}\n` : '') +
@@ -1354,7 +1363,8 @@ function startTelegramBot() {
                                     { text: `➕ مباع لـ (${currentSellCount})`, callback_data: `acc_sell_${acc.id}_${currentSellCount}` },
                                     { text: '❌ منتهي', callback_data: `acc_expire_${acc.id}` }
                                 ],
-                                [{ text: `🛒 تسجيل مبيعة لهذا الحساب`, callback_data: `qs_acc_${acc.id}` }]
+                                [{ text: `🛒 تسجيل مبيعة لهذا الحساب`, callback_data: `qs_acc_${acc.id}` }],
+                                [{ text: '❌ إغلاق', callback_data: 'close_msg' }]
                             ]
                         }
                     });
@@ -1525,7 +1535,7 @@ function startTelegramBot() {
                }
                keyboard.push(row);
            }
-           keyboard.push([{ text: '➕ منتج آخر', callback_data: 'qprod_other' }]);
+           keyboard.push([{ text: '➕ منتج آخر', callback_data: 'qprod_other' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]);
            
            await bot?.sendMessage(chatId, 'اختر المنتج من القائمة:', {
                reply_markup: {
@@ -1569,7 +1579,8 @@ function startTelegramBot() {
                   reply_markup: {
                       inline_keyboard: [
                           [{ text: 'المنتج', callback_data: 'edit_field_product' }, { text: 'السعر', callback_data: 'edit_field_price' }],
-                          [{ text: 'يوزر / اسم الزبون', callback_data: 'edit_field_customer' }, { text: 'الملاحظات', callback_data: 'edit_field_notes' }]
+                          [{ text: 'يوزر / اسم الزبون', callback_data: 'edit_field_customer' }, { text: 'الملاحظات', callback_data: 'edit_field_notes' }],
+                          [{ text: '❌ إغلاق', callback_data: 'close_msg' }]
                       ]
                   }
              });
@@ -1823,7 +1834,8 @@ export async function handleTelegramMessage(msg: any) {
           inline_keyboard: [
             [{ text: '📂 قسم الحسابات', callback_data: 'menu_accounts' }],
             [{ text: '🛒 قسم سجل المبيعات', callback_data: 'menu_sales' }],
-            [{ text: '💸 قسم المالية والمصروفات', callback_data: 'menu_finances' }]
+            [{ text: '💸 قسم المالية والمصروفات', callback_data: 'menu_finances' }],
+            [{ text: '❌ إغلاق', callback_data: 'close_msg' }]
           ]
         }
       });
