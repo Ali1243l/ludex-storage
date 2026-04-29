@@ -540,12 +540,13 @@ export default function App() {
                         {getStatusBadge(sub.expirationDate)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col gap-1">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${sub.status === 'مباع' ? 'bg-blue-100 text-blue-800' : sub.status === 'منتهي' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${sub.status === 'مباع' ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-500/10 dark:border-blue-500/20 dark:text-blue-400' : sub.status === 'منتهي' ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400' : 'bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-500/10 dark:border-slate-500/20 dark:text-slate-400'}`}>
                             {sub.status || 'غير مباع'}
                           </span>
-                          <span className="text-xs text-slate-500">
-                            مباع: {sub.sell_count || 0} مرات
+                          <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                            <ShoppingCart className="w-3 h-3" />
+                            مباع {sub.sell_count || 0} مرات
                           </span>
                         </div>
                       </td>
@@ -624,13 +625,14 @@ export default function App() {
                       <Calendar className="w-3.5 h-3.5 ml-1.5 text-slate-400 dark:text-slate-500 shrink-0" />
                       <span className="truncate">انتهاء: {sub.expirationDate || '-'}</span>
                     </div>
-                    <div className="flex items-center col-span-2">
-                       <span className="text-slate-400 dark:text-slate-500 ml-2 shrink-0">حالة المخزون:</span>
-                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ml-2 ${sub.status === 'مباع' ? 'bg-blue-100 text-blue-800' : sub.status === 'منتهي' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                    <div className="flex items-center col-span-2 mt-1 border-t border-slate-200 dark:border-slate-700/50 pt-2">
+                       <span className="text-xs font-medium text-slate-500 dark:text-slate-400 ml-2 shrink-0">حالة المخزون:</span>
+                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ml-2 border ${sub.status === 'مباع' ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-500/10 dark:border-blue-500/20 dark:text-blue-400' : sub.status === 'منتهي' ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400' : 'bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-500/10 dark:border-slate-500/20 dark:text-slate-400'}`}>
                          {sub.status || 'غير مباع'}
                        </span>
-                       <span className="text-xs text-slate-500">
-                         مباع ({sub.sell_count || 0}) مرة
+                       <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                         <ShoppingCart className="w-3 h-3" />
+                         مباع {sub.sell_count || 0} مرات
                        </span>
                     </div>
                   </div>
