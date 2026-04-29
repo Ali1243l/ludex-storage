@@ -919,7 +919,11 @@ export enum UserStep {
   EDIT_AWAITING_PRICE = "EDIT_AWAITING_PRICE",
   EDIT_AWAITING_NOTES = "EDIT_AWAITING_NOTES",
   AWAITING_ACCOUNT_DETAILS = "AWAITING_ACCOUNT_DETAILS",
-  AWAITING_PRODUCT_DETAILS = "AWAITING_PRODUCT_DETAILS"
+  AWAITING_PRODUCT_DETAILS = "AWAITING_PRODUCT_DETAILS",
+  AWAITING_EXPENSE_AMOUNT = "AWAITING_EXPENSE_AMOUNT",
+  AWAITING_EXPENSE_DETAILS = "AWAITING_EXPENSE_DETAILS",
+  AWAITING_UNIVERSAL_EDIT_ID = "AWAITING_UNIVERSAL_EDIT_ID",
+  AWAITING_UNIVERSAL_EDIT_VALUE = "AWAITING_UNIVERSAL_EDIT_VALUE"
 }
 
 export interface UserState {
@@ -1223,6 +1227,176 @@ function startTelegramBot() {
         else if (data === 'report_today') {
           const reportText = await generateTodayReport();
           await bot?.sendMessage(chatId, reportText);
+        }
+        else if (data === 'menu_main') {
+            await bot?.editMessageText('أهلاً بك يا مدير في المساعد الذكي لـ Ludex Store! 🤖\nاختر من القائمة الرئيسية:', {
+                chat_id: chatId, message_id: query.message?.message_id,
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '📂 قسم الحسابات', callback_data: 'menu_accounts' }],
+                        [{ text: '🛒 قسم سجل المبيعات', callback_data: 'menu_sales' }],
+                        [{ text: '💸 قسم المالية والمصروفات', callback_data: 'menu_finances' }]
+                    ]
+                }
+            });
+        }
+        else if (data === 'menu_accounts') {
+            await bot?.editMessageText('📂 **قسم الحسابات**\nاختر الإجراء المطلوب:', {
+                chat_id: chatId, message_id: query.message?.message_id, parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '👁️ عرض الحسابات المتوفرة', callback_data: 'accounts_view' }],
+                        [{ text: '📥 سحب حساب لتسليمه', callback_data: 'accounts_pull' }],
+                        [{ text: '✏️ تعديل حساب', callback_data: 'accounts_edit_start' }, { text: '➕ إضافة حساب', callback_data: 'add_account_help' }],
+                        [{ text: '🔙 رجوع', callback_data: 'menu_main' }]
+                    ]
+                }
+            });
+        }
+        else if (data === 'menu_sales') {
+            await bot?.editMessageText('🛒 **قسم سجل المبيعات**\nاختر الإجراء المطلوب:', {
+                chat_id: chatId, message_id: query.message?.message_id, parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '➕ إضافة مبيعة', callback_data: 'start_sale_wizard' }],
+                        [{ text: '📜 آخر المبيعات', callback_data: 'sales_view' }, { text: '✏️ تعديل مبيعة', callback_data: 'sales_edit_start' }],
+                        [{ text: '🔙 رجوع', callback_data: 'menu_main' }]
+                    ]
+                }
+            });
+        }
+        else if (data === 'menu_finances') {
+            await bot?.editMessageText('💸 **قسم المالية والمصروفات**\nاختر الإجراء المطلوب:', {
+                chat_id: chatId, message_id: query.message?.message_id, parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '📈 ملخص الواردات', callback_data: 'finances_income' }, { text: '📉 ملخص المصروفات', callback_data: 'finances_expenses' }],
+                        [{ text: '➖ إضافة مصروف جديد', callback_data: 'finances_add_expense' }],
+                        [{ text: '🔙 رجوع', callback_data: 'menu_main' }]
+                    ]
+                }
+            });
+        }
+        else if (data === 'accounts_pull') {
+            if (!supabase) throw new Error('Database not connected');
+            const { data: subs } = await supabase.from('subscriptions').select('name').order('name');
+            if (!subs || subs.length === 0) {
+                 await bot?.sendMessage(chatId, '❌ لا توجد حسابات متوفرة.');
+                 return;
+            }
+            const uniqueNames = Array.from(new Set(subs.map(s => s.name).filter(Boolean)));
+            const keyboard = [];
+            for (let i=0; i<uniqueNames.length; i+=2) {
+                const row = [];
+                row.push({ text: uniqueNames[i] as string, callback_data: `pull_acc_${uniqueNames[i]}` });
+                if (i+1 < uniqueNames.length) {
+                    row.push({ text: uniqueNames[i+1] as string, callback_data: `pull_acc_${uniqueNames[i+1]}` });
+                }
+                keyboard.push(row);
+            }
+            keyboard.push([{ text: '🔙 رجوع', callback_data: 'menu_accounts' }]);
+            
+            await bot?.editMessageText('📥 **سحب حساب لتسليمه**\nاختر الاشتراك المطلوب ليتم سحب حساب واحد متاح:', {
+                chat_id: chatId, message_id: query.message?.message_id, parse_mode: 'Markdown',
+                reply_markup: { inline_keyboard: keyboard }
+            });
+        }
+        else if (data.startsWith('pull_acc_')) {
+            const accName = data.replace('pull_acc_', '');
+            if (!supabase) throw new Error('Database not connected');
+            const { data: accounts } = await supabase.from('subscriptions')
+                .select('*')
+                .eq('name', accName)
+                .order('created_at', { ascending: true })
+                .limit(1);
+                
+            if (!accounts || accounts.length === 0) {
+                await bot?.sendMessage(chatId, `❌ لا يوجد أي حساب متاح لـ ${accName} حالياً.`);
+            } else {
+                const acc = accounts[0];
+                const msgText = `📥 **تم سحب حساب بنجاح:**\n\n📌 **المنتج:** ${acc.name}\n` +
+                                `👤 **اليوزر/الإيميل:** \`${acc.account_username || 'لا يوجد'}\`\n` +
+                                `🔑 **الباسورد:** \`${acc.account_password || 'لا يوجد'}\`\n` +
+                                (acc.notes ? `📝 **ملاحظات:** ${acc.notes}\n` : '') +
+                                `\n*(اضغط على اليوزر أو الباسورد للنسخ المباشر)*`;
+                await bot?.sendMessage(chatId, msgText, { parse_mode: 'Markdown' });
+            }
+        }
+        else if (data === 'accounts_view') {
+           if (!supabase) throw new Error('Database not connected');
+           const { data: subs, error } = await supabase.from('subscriptions').select('id, name, expirationDate, created_at');
+           if (error || !subs) {
+               await bot?.sendMessage(chatId, '❌ خطأ في جلب الحسابات');
+           } else {
+               const active = subs.filter(s => !s.expirationDate || new Date(s.expirationDate) >= new Date()).length;
+               const expired = subs.filter(s => s.expirationDate && new Date(s.expirationDate) < new Date()).length;
+               let msg = `📊 **ملخص الحسابات المتوفرة:**\n\n` + 
+                         `✅ إجمالي الحسابات الفعالة متبقية للصلاحية: ${active}\n` +
+                         `🚨 الحسابات المنتهية: ${expired}\n\n`;
+               await bot?.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+           }
+        }
+        else if (data === 'sales_view') {
+           if (!supabase) return;
+           const { data: sls } = await supabase.from('sales').select('id, productName, price, customerName, date').order('created_at', { ascending: false }).limit(5);
+           if (!sls || sls.length === 0) {
+               await bot?.sendMessage(chatId, '❌ لا توجد مبيعات بعد.');
+               return;
+           }
+           let msg = `📜 **آخر 5 مبيعات:**\n\n`;
+           sls.forEach((s, idx) => {
+               msg += `${idx+1}. 🛍️ ${s.productName}\n💵 السعر: ${s.price}\n👤 الزبون: ${s.customerName || 'غير معروف'}\n📅 التاريخ: ${s.date || 'غير معروف'}\n🔑 ID: \`${s.id}\`\n---\n`;
+           });
+           await bot?.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+        }
+        else if (data === 'finances_income') {
+           if (!supabase) return;
+           const { data: tx } = await supabase.from('transactions').select('id, amount, description, type').eq('type', 'revenue').order('created_at', { ascending: false }).limit(5);
+           let msg = `📈 **ملخص الواردات (آخر 5 حركات):**\n\n`;
+           if (tx && tx.length > 0) {
+               tx.forEach((t, idx) => {
+                   msg += `${idx+1}. 💵 ${t.amount} د.ع - ${t.description || ''}\n`;
+               });
+           } else {
+               msg += 'لا توجد واردات مسجلة مؤخراً.';
+           }
+           await bot?.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+        }
+        else if (data === 'finances_expenses') {
+           if (!supabase) return;
+           const { data: tx } = await supabase.from('transactions').select('id, amount, description, type').eq('type', 'expense').order('created_at', { ascending: false }).limit(5);
+           let msg = `📉 **ملخص المصروفات (آخر 5 حركات):**\n\n`;
+           if (tx && tx.length > 0) {
+               tx.forEach((t, idx) => {
+                   msg += `${idx+1}. 🔴 ${t.amount} د.ع - ${t.description || ''}\n`;
+               });
+           } else {
+               msg += 'لا توجد مصروفات مسجلة مؤخراً.';
+           }
+           await bot?.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+        }
+        else if (data === 'finances_add_expense') {
+            userSessions.set(userId, { step: UserStep.AWAITING_EXPENSE_AMOUNT, data: {} });
+            await bot?.sendMessage(chatId, '➖ **إضافة مصروف جديد**\n\nأرسل الان مبلغ المصروف (رقم فقط):', { parse_mode: 'Markdown' });
+        }
+        // Universal edit points
+        else if (data === 'accounts_edit_start') {
+            userSessions.set(userId, { step: UserStep.AWAITING_UNIVERSAL_EDIT_ID, data: { module: 'subscriptions' } });
+            await bot?.sendMessage(chatId, '✏️ أرسل المعرف (ID) للحساب الذي تريد تعديله:');
+        }
+        else if (data === 'sales_edit_start') {
+            userSessions.set(userId, { step: UserStep.AWAITING_UNIVERSAL_EDIT_ID, data: { module: 'sales' } });
+            await bot?.sendMessage(chatId, '✏️ أرسل المعرف (ID) للمبيعة التي تريد تعديلها:');
+        }
+        else if (data.startsWith('univ_edit_')) { 
+             const field = data.replace('univ_edit_', '');
+             const session = userSessions.get(userId);
+             if (session && session.step === UserStep.AWAITING_UNIVERSAL_EDIT_ID) {
+                 session.step = UserStep.AWAITING_UNIVERSAL_EDIT_VALUE;
+                 session.data.field = field;
+                 await bot?.sendMessage(chatId, `أرسل القيمة الجديدة لـ ${field}:`);
+                 await bot?.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: query.message?.message_id });
+             }
         }
         else if (data === 'add_account_help') {
            userSessions.set(userId, { step: UserStep.AWAITING_ACCOUNT_DETAILS, data: {} });
@@ -1539,11 +1713,12 @@ export async function handleTelegramMessage(msg: any) {
     if (!text) return;
 
     if (text === '/start' || text === 'قائمة' || text === '/menu' || text === 'القائمة') {
-      await bot?.sendMessage(chatId, 'أهلاً بك يا مدير في المساعد الذكي لـ Ludex Store! 🤖\nاختر من القائمة التالية:', {
+      await bot?.sendMessage(chatId, 'أهلاً بك يا مدير في المساعد الذكي لـ Ludex Store! 🤖\nاختر من القائمة الرئيسية:', {
         reply_markup: {
           inline_keyboard: [
-            [{ text: '➕ إضافة مبيعة', callback_data: 'start_sale_wizard' }, { text: '📊 ملخص اليوم', callback_data: 'report_today' }],
-            [{ text: '🎮 إضافة حساب جديد', callback_data: 'add_account_help' }, { text: '📦 إضافة منتج', callback_data: 'add_product_help' }]
+            [{ text: '📂 قسم الحسابات', callback_data: 'menu_accounts' }],
+            [{ text: '🛒 قسم سجل المبيعات', callback_data: 'menu_sales' }],
+            [{ text: '💸 قسم المالية والمصروفات', callback_data: 'menu_finances' }]
           ]
         }
       });
@@ -1901,6 +2076,95 @@ export async function handleTelegramMessage(msg: any) {
              } catch (err: any) {
                 await bot?.sendMessage(chatId, 'خطأ: ' + err.message);
              }
+             return;
+        }
+
+        if (session.step === UserStep.AWAITING_EXPENSE_AMOUNT) {
+             const amount = Number(text.replace(/[^\d.]/g, ''));
+             if (isNaN(amount) || amount <= 0) {
+                 await bot?.sendMessage(chatId, '⚠️ الرجاء إدخال مبلغ صحيح (أرقام فقط).');
+                 return;
+             }
+             session.data.amount = amount;
+             session.step = UserStep.AWAITING_EXPENSE_DETAILS;
+             await bot?.sendMessage(chatId, '📝 أرسل تفاصيل هذا المصروف (مثال: راتب، إيجار، إعلانات):');
+             return;
+        }
+
+        if (session.step === UserStep.AWAITING_EXPENSE_DETAILS) {
+             if (!supabase) return;
+             try {
+                await supabase.from('transactions').insert([{
+                    type: 'expense',
+                    amount: session.data.amount,
+                    description: text,
+                    person: 'System'
+                }]);
+                await bot?.sendMessage(chatId, `✅ تم تسجيل المصروف بنجاح!\nالمبلغ: ${session.data.amount}\nالتفاصيل: ${text}`);
+             } catch (err: any) {
+                await bot?.sendMessage(chatId, '❌ خطأ أثناء تسجيل المصروف: ' + err.message);
+             }
+             userSessions.delete(userId);
+             return;
+        }
+
+        if (session.step === UserStep.AWAITING_UNIVERSAL_EDIT_ID) {
+             if (!supabase) return;
+             const editId = text.trim();
+             const module = session.data.module; // 'sales' or 'subscriptions'
+             
+             // Verify ID exists
+             const { data: record, error } = await supabase.from(module).select('id').eq('id', editId).maybeSingle();
+             if (error || !record) {
+                 await bot?.sendMessage(chatId, '❌ لم يتم العثور على سجل بهذا المعرف (ID). جرب مرة أخرى أو أرسل /cancel.');
+                 return;
+             }
+             
+             session.data.editId = editId;
+             
+             // Generate buttons based on module
+             const inline_keyboard = [];
+             if (module === 'sales') {
+                 inline_keyboard.push(
+                     [{ text: 'المنتج', callback_data: 'univ_edit_productName' }, { text: 'السعر', callback_data: 'univ_edit_price' }],
+                     [{ text: 'يوزر / اسم الزبون', callback_data: 'univ_edit_customerName' }, { text: 'الملاحظات', callback_data: 'univ_edit_notes' }]
+                 );
+             } else if (module === 'subscriptions') {
+                 inline_keyboard.push(
+                     [{ text: 'اسم الحساب', callback_data: 'univ_edit_name' }, { text: 'التصنيف', callback_data: 'univ_edit_category' }],
+                     [{ text: 'اليوزر', callback_data: 'univ_edit_account_username' }, { text: 'الباسورد', callback_data: 'univ_edit_account_password' }],
+                     [{ text: 'تاريخ الانتهاء', callback_data: 'univ_edit_expirationDate' }, { text: 'الملاحظات', callback_data: 'univ_edit_notes' }]
+                 );
+             }
+             
+             await bot?.sendMessage(chatId, '✅ تم العثور على السجل. ماذا تريد أن تعدل؟', {
+                 reply_markup: { inline_keyboard }
+             });
+             // State changes in callback_query now
+             return;
+        }
+
+        if (session.step === UserStep.AWAITING_UNIVERSAL_EDIT_VALUE) {
+             if (!supabase) return;
+             const { module, editId, field } = session.data;
+             try {
+                 const updates: any = {};
+                 let parsedValue: any = text;
+                 if (field === 'price' || field === 'costPrice' || field === 'sellingPrice') {
+                     parsedValue = Number(text.replace(/[^\d.]/g, ''));
+                     if (isNaN(parsedValue)) {
+                         await bot?.sendMessage(chatId, '⚠️ الرجاء إدخال رقم صحيح.');
+                         return;
+                     }
+                 }
+                 updates[field] = parsedValue;
+                 const { error } = await supabase.from(module).update(updates).eq('id', editId);
+                 if (error) throw error;
+                 await bot?.sendMessage(chatId, `✅ تم تحديث الحقل (${field}) بنجاح.`);
+             } catch (err: any) {
+                 await bot?.sendMessage(chatId, '❌ خطأ أثناء التحديث: ' + err.message);
+             }
+             userSessions.delete(userId);
              return;
         }
 
