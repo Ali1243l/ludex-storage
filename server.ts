@@ -1313,31 +1313,45 @@ function startTelegramBot() {
             if (!supabase) throw new Error('Database not connected');
             
             try {
-                const { data: accounts, error } = await supabase.from('subscriptions')
+                const today = new Date().toISOString().split('T')[0];
+                const { data: rawAccounts, error } = await supabase.from('subscriptions')
                     .select('*')
-                    .ilike('name', `${safeName}%`)
-                    .order('created_at', { ascending: true })
-                    .limit(1);
+                    .ilike('name', `%${safeName}%`)
+                    .or(`expirationDate.is.null,expirationDate.gt.${today},expirationDate.eq.${today}`)
+                    .order('id', { ascending: true })
+                    .limit(50);
                     
                 if (error) {
-                    console.error("Supabase Error pulling individual account:", error);
-                    await bot?.sendMessage(chatId, `❌ خطأ في قاعدة البيانات عند جلب الحساب: ${error.message}`);
+                    console.error("Supabase Error pulling individual account:", JSON.stringify(error));
+                    await bot?.sendMessage(chatId, `❌ خطأ في قاعدة البيانات عند جلب الحساب: ${error.message || 'خطأ غير معروف'}`);
                     return;
                 }
 
+                // Filter out manually expired accounts in JS to avoid SQL crash if 'status' column is not created yet
+                const accounts = rawAccounts ? rawAccounts.filter((a: any) => a.status !== 'منتهي') : [];
+
                 if (!accounts || accounts.length === 0) {
-                    await bot?.sendMessage(chatId, `❌ لا يوجد أي حساب متاح يطابق المطالبة حالياً.`);
+                    await bot?.sendMessage(chatId, `❌ لا يوجد أي حساب متاح (غير منتهي) يطابق المطالبة حالياً.`);
                 } else {
                     const acc = accounts[0];
-                    const msgText = `📥 **تم سحب حساب بنجاح:**\n\n📌 **المنتج:** ${acc.name}\n` +
-                                    `👤 **اليوزر/الإيميل:** \`${acc.account_username || 'لا يوجد'}\`\n` +
-                                    `🔑 **الباسورد:** \`${acc.account_password || 'لا يوجد'}\`\n` +
+                    const currentStatus = acc.status || 'غير مباع';
+                    const currentSellCount = acc.sell_count || 0;
+                    
+                    const msgText = `📥 **تفاصيل الحساب المطلوبة:**\n\n` +
+                                    `📌 **المنتج:** ${acc.name}\n` +
                                     (acc.notes ? `📝 **ملاحظات:** ${acc.notes}\n` : '') +
-                                    `\n*(اضغط على اليوزر أو الباسورد للنسخ المباشر)*`;
+                                    `\n\`\`\`\nاسم الحساب: ${acc.name}\nيوزر: ${acc.account_username || 'لا يوجد'}\nرمز: ${acc.account_password || 'لا يوجد'}\n\`\`\`\n` +
+                                    `*(اضغط على المربع أعلاه للنسخ الشامل)*`;
                     await bot?.sendMessage(chatId, msgText, { 
                         parse_mode: 'Markdown',
                         reply_markup: {
-                            inline_keyboard: [[{ text: '✅ تم تسليم الحساب (حذف من المخزون)', callback_data: `acc_del_${acc.id}` }]]
+                            inline_keyboard: [
+                                [{ text: `📦 حالة الحساب: ${currentStatus}`, callback_data: `acc_noop` }],
+                                [
+                                    { text: `➕ مباع لـ (${currentSellCount})`, callback_data: `acc_sell_${acc.id}_${currentSellCount}` },
+                                    { text: '❌ منتهي', callback_data: `acc_expire_${acc.id}` }
+                                ]
+                            ]
                         }
                     });
                 }
@@ -1346,27 +1360,57 @@ function startTelegramBot() {
                 await bot?.sendMessage(chatId, `❌ حدث خطأ غير متوقع: ${err.message}`);
             }
         }
-        else if (data.startsWith('acc_del_')) {
-            const accId = data.replace('acc_del_', '');
+        else if (data.startsWith('acc_sell_')) {
+            const parts = data.replace('acc_sell_', '').split('_');
+            const accId = parts[0];
+            const currentCount = parseInt(parts[1] || '0', 10);
+            const newCount = currentCount + 1;
+            
             if (!supabase) return;
-            const { error } = await supabase.from('subscriptions').delete().eq('id', accId);
+            const { error } = await supabase.from('subscriptions').update({ status: 'مباع', sell_count: newCount }).eq('id', accId);
             if (error) {
-                console.error("Supabase Error deleting account:", error);
-                await bot?.sendMessage(chatId, `❌ خطأ في حذف الحساب بعد تسليمه: ${error.message}`);
+                console.error("Supabase Error updating account status:", error);
+                await bot?.sendMessage(chatId, `❌ لتفعيل هذه الميزة، يرجى الذهاب للوحة تحكم Supabase وإضافة عمودين لجدول subscriptions:\n1. status (نوع text)\n2. sell_count (نوع int4)`);
                 return;
             }
-            await bot?.editMessageText((query.message?.text || 'تم التسليم') + '\n\n✅ **(تم تسليمه وحذفه من المخزون)**', {
-                chat_id: chatId, 
-                message_id: query.message?.message_id,
-                parse_mode: 'Markdown',
-                reply_markup: { inline_keyboard: [] }
-            });
+            
+            if (query.message?.reply_markup) {
+                const newMarkup = { ...query.message.reply_markup };
+                if (newMarkup.inline_keyboard[0] && newMarkup.inline_keyboard[0][0]) {
+                     newMarkup.inline_keyboard[0][0].text = `📦 حالة الحساب: مباع`;
+                }
+                if (newMarkup.inline_keyboard[1] && newMarkup.inline_keyboard[1][0]) {
+                    newMarkup.inline_keyboard[1][0].text = `➕ مباع لـ (${newCount})`;
+                    newMarkup.inline_keyboard[1][0].callback_data = `acc_sell_${accId}_${newCount}`;
+                }
+                await bot?.editMessageReplyMarkup(newMarkup, { chat_id: chatId, message_id: query.message?.message_id });
+            }
+            await bot?.answerCallbackQuery(query.id, { text: `✅ تم زيادة عدد البيعات إلى ${newCount}!` });
+        }
+        else if (data.startsWith('acc_expire_')) {
+            const accId = data.replace('acc_expire_', '');
+            if (!supabase) return;
+            const { error } = await supabase.from('subscriptions').update({ status: 'منتهي' }).eq('id', accId);
+            if (error) {
+                console.error("Supabase Error updating account status:", error);
+                 await bot?.sendMessage(chatId, `❌ يرجى إضافة الأعمدة status و sell_count في الداتا بيس أولاً.`);
+                return;
+            }
+            if (query.message?.reply_markup) {
+                const newMarkup = { ...query.message.reply_markup };
+                if (newMarkup.inline_keyboard[0] && newMarkup.inline_keyboard[0][0]) {
+                     newMarkup.inline_keyboard[0][0].text = `📦 حالة الحساب: منتهي`;
+                }
+                await bot?.editMessageReplyMarkup(newMarkup, { chat_id: chatId, message_id: query.message?.message_id });
+            }
+            await bot?.answerCallbackQuery(query.id, { text: `❌ تم تحديد الحساب كمنتهي!` });
         }
         else if (data === 'accounts_view') {
            if (!supabase) throw new Error('Database not connected');
-           const { data: subs, error } = await supabase.from('subscriptions').select('id, name, expirationDate, created_at');
+           const { data: subs, error } = await supabase.from('subscriptions').select('id, name, expirationDate');
            if (error || !subs) {
-               await bot?.sendMessage(chatId, '❌ خطأ في جلب الحسابات');
+               console.error("Supabase Error in accounts_view:", JSON.stringify(error));
+               await bot?.sendMessage(chatId, `❌ خطأ في جلب الحسابات: ${error?.message || 'خطأ غير معروف'}`);
            } else {
                const active = subs.filter(s => !s.expirationDate || new Date(s.expirationDate) >= new Date()).length;
                const expired = subs.filter(s => s.expirationDate && new Date(s.expirationDate) < new Date()).length;
