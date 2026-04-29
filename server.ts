@@ -503,7 +503,9 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
     supabase.from('subscriptions').select('id, name, category, account_username, account_password, notes').order('activationDate', { ascending: false }).limit(50).then((res: any) => res).catch(() => ({ data: [] }))
   ]);
   
+  const currentDate = new Date().toISOString().split('T')[0];
   const systemInstruction = `
+  تاريخ اليوم هو: ${currentDate}
   أنت مساعد ذكي ومدير مبيعات لمتجر Ludex Store وتتحدث باللهجة العراقية اللطيفة والمحترمة (بدون تكلف).
   مهمتك قراءة رسالة مدير المتجر وتحديد الإجراء المطلوب بدقة واحترافية.
   لا تفترض القائمة أو تخمن، اقرأ السياق بذكاء:

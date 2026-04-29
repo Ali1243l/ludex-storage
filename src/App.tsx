@@ -55,6 +55,7 @@ export default function App() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [sortBy, setSortBy] = useState<string>('expirationDate_asc');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -217,19 +218,27 @@ export default function App() {
   }, [subscriptions]);
 
   const filteredSubscriptions = useMemo(() => {
-    return subscriptions.filter(sub => {
+    let filtered = subscriptions.filter(sub => {
       const matchSearch = (sub.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (sub.notes || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchCategory = selectedCategory === '' || sub.category === selectedCategory;
       return matchSearch && matchCategory;
-    }).sort((a, b) => {
+    });
+
+    return filtered.sort((a, b) => {
+      if (sortBy === 'name_asc') return (a.name || '').localeCompare(b.name || '');
+      if (sortBy === 'name_desc') return (b.name || '').localeCompare(a.name || '');
+      if (sortBy === 'activationDate_asc') return new Date(a.activationDate || 0).getTime() - new Date(b.activationDate || 0).getTime();
+      if (sortBy === 'activationDate_desc') return new Date(b.activationDate || 0).getTime() - new Date(a.activationDate || 0).getTime();
+      if (sortBy === 'expirationDate_desc') return new Date(b.expirationDate || 0).getTime() - new Date(a.expirationDate || 0).getTime();
+      
       const dateDiff = new Date(a.expirationDate || 0).getTime() - new Date(b.expirationDate || 0).getTime();
       if (dateDiff === 0) {
         return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
       }
       return dateDiff;
     });
-  }, [subscriptions, searchQuery, selectedCategory]);
+  }, [subscriptions, searchQuery, selectedCategory, sortBy]);
 
   const stats = useMemo(() => {
     let active = 0;
@@ -416,6 +425,20 @@ export default function App() {
                       {categories.map(cat => (
                         <option key={cat} value={cat}>{cat}</option>
                       ))}
+                    </select>
+                  </div>
+                  <div className="w-full sm:w-48">
+                    <select
+                      className="block w-full py-2.5 px-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-all"
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
+                    >
+                      <option value="expirationDate_asc">الانتهاء (الأقرب)</option>
+                      <option value="expirationDate_desc">الانتهاء (الأبعد)</option>
+                      <option value="activationDate_desc">التفعيل (الأحدث)</option>
+                      <option value="activationDate_asc">التفعيل (الأقدم)</option>
+                      <option value="name_asc">الاسم (أ-ي)</option>
+                      <option value="name_desc">الاسم (ي-أ)</option>
                     </select>
                   </div>
                 </div>
