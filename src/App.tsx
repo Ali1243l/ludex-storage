@@ -54,6 +54,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -210,18 +211,25 @@ export default function App() {
     }
   };
 
+  const categories = useMemo(() => {
+    const cats = new Set(subscriptions.map(s => s.category).filter(Boolean));
+    return Array.from(cats).sort();
+  }, [subscriptions]);
+
   const filteredSubscriptions = useMemo(() => {
-    return subscriptions.filter(sub =>
-      (sub.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (sub.notes || '').toLowerCase().includes(searchQuery.toLowerCase())
-    ).sort((a, b) => {
+    return subscriptions.filter(sub => {
+      const matchSearch = (sub.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          (sub.notes || '').toLowerCase().includes(searchQuery.toLowerCase());
+      const matchCategory = selectedCategory === '' || sub.category === selectedCategory;
+      return matchSearch && matchCategory;
+    }).sort((a, b) => {
       const dateDiff = new Date(a.expirationDate || 0).getTime() - new Date(b.expirationDate || 0).getTime();
       if (dateDiff === 0) {
         return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
       }
       return dateDiff;
     });
-  }, [subscriptions, searchQuery]);
+  }, [subscriptions, searchQuery, selectedCategory]);
 
   const stats = useMemo(() => {
     let active = 0;
@@ -385,17 +393,31 @@ export default function App() {
             {/* Actions and List */}
             <div className="bg-white dark:bg-slate-800 shadow-sm rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors duration-200">
               <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div className="relative w-full sm:max-w-md">
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                    <Search className="h-5 w-5 text-slate-400 dark:text-slate-500" />
+                <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto flex-1">
+                  <div className="relative w-full sm:max-w-md">
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                      <Search className="h-5 w-5 text-slate-400 dark:text-slate-500" />
+                    </div>
+                    <input
+                      type="text"
+                      className="block w-full pl-3 pr-10 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-all"
+                      placeholder="ابحث عن حساب، ملاحظة..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
                   </div>
-                  <input
-                    type="text"
-                    className="block w-full pl-3 pr-10 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl leading-5 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-all"
-                    placeholder="ابحث عن حساب، ملاحظة، أو تصنيف..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
+                  <div className="w-full sm:w-48">
+                    <select
+                      className="block w-full py-2.5 px-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-all"
+                      value={selectedCategory}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                    >
+                      <option value="">كل التصنيفات</option>
+                      {categories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 {role === 'admin' && (
                   <button
