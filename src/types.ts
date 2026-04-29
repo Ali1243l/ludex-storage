@@ -8,6 +8,8 @@ export interface Subscription {
   account_username?: string;
   account_password?: string;
   created_at?: string;
+  status?: string;
+  sell_count?: number;
 }
 
 export type TransactionType = 'expense' | 'income';

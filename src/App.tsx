@@ -462,7 +462,8 @@ export default function App() {
                   <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">التصنيف</th>
                   <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">تاريخ التفعيل</th>
                   <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">تاريخ الانتهاء</th>
-                  <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">الحالة</th>
+                  <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">الحالة والتاريخ</th>
+                  <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">حالة البيع (المخزون)</th>
                   <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">إجراءات</th>
                 </tr>
               </thead>
@@ -538,6 +539,16 @@ export default function App() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getStatusBadge(sub.expirationDate)}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col gap-1">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${sub.status === 'مباع' ? 'bg-blue-100 text-blue-800' : sub.status === 'منتهي' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                            {sub.status || 'غير مباع'}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            مباع: {sub.sell_count || 0} مرات
+                          </span>
+                        </div>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         {role === 'admin' && (
                           <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -612,6 +623,15 @@ export default function App() {
                     <div className="flex items-center">
                       <Calendar className="w-3.5 h-3.5 ml-1.5 text-slate-400 dark:text-slate-500 shrink-0" />
                       <span className="truncate">انتهاء: {sub.expirationDate || '-'}</span>
+                    </div>
+                    <div className="flex items-center col-span-2">
+                       <span className="text-slate-400 dark:text-slate-500 ml-2 shrink-0">حالة المخزون:</span>
+                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ml-2 ${sub.status === 'مباع' ? 'bg-blue-100 text-blue-800' : sub.status === 'منتهي' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                         {sub.status || 'غير مباع'}
+                       </span>
+                       <span className="text-xs text-slate-500">
+                         مباع ({sub.sell_count || 0}) مرة
+                       </span>
                     </div>
                   </div>
 
