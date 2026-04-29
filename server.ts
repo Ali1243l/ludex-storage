@@ -539,7 +539,7 @@ async function processBotMessage(text: string, supabase: any): Promise<string> {
     "action": "insert_subscription",
     "subscription_data": {
       "name": "اسم الاشتراك/الحساب (كيم باس، نتفلكس، الخ)",
-      "category": "اختصاصه (العاب، بث، عام)",
+      "category": "التصنيف المذكور نصاً في الرسالة (مثلاً: إذا كتب 'اشتراك' فضعه كما كتبه 'اشتراك')، وإذا لم يذكر استنتجه",
       "activationDate": "تاريخ التفعيل (أمس أو اليوم إذا لم يُذكر، بصيغة YYYY-MM-DD)",
       "expirationDate": "تاريخ الانتهاء المرجح (بصيغة YYYY-MM-DD). ملاحظة مهمة جداً: إذا ذكر المدير مدة مثل '60 يوم' أو 'شهرين' أو نحو ذلك، يجب عليك حساب تاريخ الانتهاء بإضافة هذه المدة إلى تاريخ التفعيل بدقة.",
       "account_username": "الايميل/اليوزر",
