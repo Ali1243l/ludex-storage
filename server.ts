@@ -922,6 +922,7 @@ export enum UserStep {
   AWAITING_PRODUCT_DETAILS = "AWAITING_PRODUCT_DETAILS",
   AWAITING_EXPENSE_AMOUNT = "AWAITING_EXPENSE_AMOUNT",
   AWAITING_EXPENSE_DETAILS = "AWAITING_EXPENSE_DETAILS",
+  AWAITING_QUICK_SALE_DETAILS = "AWAITING_QUICK_SALE_DETAILS",
   AWAITING_UNIVERSAL_EDIT_ID = "AWAITING_UNIVERSAL_EDIT_ID",
   AWAITING_UNIVERSAL_EDIT_VALUE = "AWAITING_UNIVERSAL_EDIT_VALUE"
 }
@@ -1088,7 +1089,9 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
     }
 
     const custDisplay = session.data.customerUsername ? `${session.data.customerName} (${session.data.customerUsername})` : session.data.customerName;
-    let receiptText = `✅ تمت إضافة مبيعة جديدة!\n\n👤 الزبون: ${custDisplay}\n📦 المنتج: ${session.data.productName}\n💵 السعر: ${session.data.price} د.ع\n📝 ملاحظات: ${strictNotes || 'لا يوجد'}`;
+    let receiptText = session.data.isQuickSale
+        ? `✅ تم تسجيل المبيعة وإرسالها للمالية، وتحديث حالة الحساب إلى مباع!\n\n👤 الزبون: ${custDisplay}\n📦 المنتج: ${session.data.productName}\n💵 السعر: ${session.data.price} د.ع\n📝 ملاحظات: ${strictNotes || 'لا يوجد'}`
+        : `✅ تمت إضافة مبيعة جديدة!\n\n👤 الزبون: ${custDisplay}\n📦 المنتج: ${session.data.productName}\n💵 السعر: ${session.data.price} د.ع\n📝 ملاحظات: ${strictNotes || 'لا يوجد'}`;
     
     if (finalCustInfo) {
         receiptText += `\n\n---\n✅ معلومات الزبون (سهلة النسخ):\nالاسم: \`${finalCustInfo.name}\`\nعدد مرات الشراء: \`${finalCustInfo.purchase_count || 1}\`\nكود الزبون: \`${finalCustInfo.customer_code}\`\nالمبلغ الكلي: \`${finalCustInfo.total_spent || session.data.price}\``;
@@ -1350,7 +1353,8 @@ function startTelegramBot() {
                                 [
                                     { text: `➕ مباع لـ (${currentSellCount})`, callback_data: `acc_sell_${acc.id}_${currentSellCount}` },
                                     { text: '❌ منتهي', callback_data: `acc_expire_${acc.id}` }
-                                ]
+                                ],
+                                [{ text: `🛒 تسجيل مبيعة لهذا الحساب`, callback_data: `qs_acc_${acc.id}` }]
                             ]
                         }
                     });
@@ -1359,6 +1363,23 @@ function startTelegramBot() {
                 console.error("Unexpected error pulling account:", err);
                 await bot?.sendMessage(chatId, `❌ حدث خطأ غير متوقع: ${err.message}`);
             }
+        }
+        else if (data.startsWith('qs_acc_')) {
+            const accId = data.replace('qs_acc_', '');
+            if (!supabase) return;
+            const { data: accData, error: accErr } = await supabase.from('subscriptions').select('id, name, status, sell_count').eq('id', accId).single();
+            if (accErr || !accData) {
+                await bot?.sendMessage(chatId, `❌ خطأ في جلب تفاصيل الحساب: ${accErr?.message}`);
+                return;
+            }
+            
+            userSessions.set(userId, { 
+                step: UserStep.AWAITING_QUICK_SALE_DETAILS, 
+                data: { accountId: accId, accountName: accData.name, accountStatus: accData.status, accountSellCount: accData.sell_count } 
+            });
+            
+            await bot?.sendMessage(chatId, `✍️ لتسجيل المبيعة، أرسل **السعر** و **معرف/اسم الزبون** في رسالة واحدة. مثال:\n15000\n@ali`, { parse_mode: 'Markdown' });
+            await bot?.answerCallbackQuery(query.id);
         }
         else if (data.startsWith('acc_sell_')) {
             const parts = data.replace('acc_sell_', '').split('_');
@@ -2029,6 +2050,49 @@ export async function handleTelegramMessage(msg: any) {
              session.data.defaultPrice = 0;
              session.step = UserStep.AWAITING_SALE_DETAILS;
              await bot?.sendMessage(chatId, `✅ المنتج المختار: ${text}\n\nأرسل الآن التفاصيل في رسالة واحدة متتالية:\n(السعر)\n(اسم أو يوزر الزبون)\n(الملاحظات - اختياري)\n\nمثال:\n15000\n@ali\nدفع كاش`);
+             return;
+        }
+
+        if (session.step === UserStep.AWAITING_QUICK_SALE_DETAILS) {
+             const lines = text.split('\n').map(p => p.trim()).filter(p => !!p);
+             const parts = text.includes('\n') ? lines : text.split(',').map(p => p.trim()).filter(p => !!p);
+             
+             if (parts.length >= 2) {
+                 const priceStr = parts[0];
+                 const price = parsePrice(priceStr);
+                 if (isNaN(price)) {
+                     await bot?.sendMessage(chatId, '⚠️ يجب أن يكون السطر/القسم الأول رقماً يمثل السعر.\nأعد الإرسال مجدداً:');
+                     return;
+                 }
+                 const customerStr = parts[1];
+                 const customer = parseCustomer(customerStr);
+                 let notes = parts.slice(2).join('\n');
+                 if (notes.includes('(هذه الرسالة هي رد على:')) {
+                     notes = notes.split('(هذه الرسالة هي رد على:')[0].trim();
+                 }
+                 
+                 session.data.price = price;
+                 session.data.customerName = customer.name;
+                 session.data.customerUsername = customer.username;
+                 session.data.notes = notes;
+                 session.data.productName = session.data.accountName;
+                 session.data.isQuickSale = true;
+                 
+                 // 1. Update account status
+                 if (!supabase) return;
+                 const newSellCount = (session.data.accountSellCount || 0) + 1;
+                 const { error: accErr } = await supabase.from('subscriptions').update({ status: 'مباع', sell_count: newSellCount }).eq('id', session.data.accountId);
+                 if (accErr) {
+                     console.error("Error updating account status:", accErr);
+                     await bot?.sendMessage(chatId, '⚠️ حدث خطأ أثناء تحديث حالة الحساب في المخزون.');
+                 }
+                 
+                 // 2. Save Sale
+                 await saveSaleAndSendReceipt(chatId, userId, session);
+                 
+             } else {
+                 await bot?.sendMessage(chatId, '⚠️ البيانات غير مكتملة، يجب إرسال السعر ثم الزبون على الأقل. أعد الإرسال مجدداً بشكل صحيح:');
+             }
              return;
         }
 
