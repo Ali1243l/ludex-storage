@@ -258,30 +258,27 @@ app.get('/api/sync-webhook', async (req, res) => {
   }
 });
 
-app.post('/api/telegram-webhook', (req, res) => {
-  // 1. Respond quickly to prevent Vercel/Telegram timeout
-  res.status(200).send('OK');
-
-  // 2. Process message asynchronously
-  (async () => {
-    try {
-      console.log('Received Telegram webhook:', JSON.stringify(req.body));
-      if (!bot) {
-        console.log('Bot instance is not initialized. Initializing now...');
-        startTelegramBot(); // still need this to init bot and cron
-      }
-      
-      if (req.body && req.body.message) {
-        await handleTelegramMessage(req.body.message);
-      } else if (req.body && req.body.edited_message) {
-        await handleTelegramMessage(req.body.edited_message);
-      } else if (bot) {
-        bot.processUpdate(req.body); // fallback for inline actions etc, fire and forget
-      }
-    } catch(err) {
-      console.error('Webhook async processing error:', err);
+app.post('/api/telegram-webhook', async (req, res) => {
+  try {
+    console.log('Received Telegram webhook:', JSON.stringify(req.body));
+    if (!bot) {
+      console.log('Bot instance is not initialized. Initializing now...');
+      startTelegramBot();
     }
-  })();
+    
+    if (req.body && req.body.message) {
+      await handleTelegramMessage(req.body.message);
+    } else if (req.body && req.body.edited_message) {
+      await handleTelegramMessage(req.body.edited_message);
+    } else if (bot) {
+      bot.processUpdate(req.body); // fallback for inline actions etc, fire and forget
+    }
+  } catch(err) {
+    console.error('Webhook processing error:', err);
+  } finally {
+    // Always respond 200 to prevent Telegram from retrying endlessly
+    res.status(200).send('OK');
+  }
 });
 
 app.get('/api/ping', (req, res) => {
