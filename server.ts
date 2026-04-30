@@ -416,6 +416,8 @@ async function generateTodayReport() {
     const salesCount = sales.length;
     
     let totalRevenue = 0;
+    let totalCost = 0;
+    
     if (revenuesRes.data && revenuesRes.data.length > 0) {
         totalRevenue = revenuesRes.data.reduce((sum, r) => sum + Number(r.amount), 0);
     } else {
@@ -427,8 +429,12 @@ async function generateTodayReport() {
         if(s.productName) {
             productCounts[s.productName] = (productCounts[s.productName] || 0) + 1;
         }
+        if(s.costPrice) {
+            totalCost += Number(s.costPrice);
+        }
     });
     
+    const netProfit = totalRevenue - totalCost;
     let topProduct = "لا يوجد";
     let maxCount = 0;
     for (const [product, count] of Object.entries(productCounts)) {
@@ -441,6 +447,8 @@ async function generateTodayReport() {
     return `📊 ملخص مبيعات اليوم 📊\n\n` + 
            `🛒 عدد المبيعات: ${salesCount}\n` +
            `💰 إجمالي الواردات: ${totalRevenue.toLocaleString()} د.ع\n` + 
+           `📉 إجمالي التكاليف: ${totalCost.toLocaleString()} د.ع\n` + 
+           `💵 **الربح الصافي:** ${netProfit.toLocaleString()} د.ع\n\n` + 
            `🏆 المنتج الأكثر مبيعاً: ${topProduct} (${maxCount} مرات)`;
   } catch(e: any) {
     return 'خطأ في جلب التقرير: ' + e.message;
@@ -558,12 +566,21 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
         }
     }
 
+    let costPrice = 0;
+    if (session.data.productName) {
+        const { data: prodData } = await supabase.from('products').select('costPrice').eq('name', session.data.productName).single();
+        if (prodData && prodData.costPrice) {
+            costPrice = prodData.costPrice;
+        }
+    }
+
     const insertData: any = {
         id: saleId,
         customerName: session.data.customerName,
         customerCode: custCode,
         productName: session.data.productName,
         price: session.data.price,
+        costPrice: costPrice,
         notes: strictNotes,
         date: dateStr
     };
@@ -577,12 +594,17 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
     if (error) {
         const errorMsg = error.message;
         // Ignore column mapping error if customerUsername doesn't exist
-        if (errorMsg.includes("column") && errorMsg.includes("does not exist") && session.data.customerUsername) {
-             delete insertData.customerUsername;
+        if (errorMsg.includes("column") && errorMsg.includes("does not exist")) {
+             if (errorMsg.includes("costPrice")) delete insertData.costPrice;
+             if (errorMsg.includes("customerUsername") && session.data.customerUsername) delete insertData.customerUsername;
+             
              const { error: retryError } = await supabase.from('sales').insert([insertData]);
              if (retryError) {
                  await bot?.sendMessage(chatId, 'حدث خطأ أثناء الحفظ (إعادة محاولة): ' + retryError.message);
                  return;
+             }
+             if (errorMsg.includes("costPrice")) {
+                 await bot?.sendMessage(chatId, '⚠️ ملاحظة: تم تسجيل المبيعة لكن عمود (costPrice) غير मौजूद في جدول sales، لذا لم يتم إرفاق التكلفة. الرجاء إضافته من Supabase.');
              }
         } else {
              await bot?.sendMessage(chatId, 'حدث خطأ أثناء الحفظ: ' + error.message);
@@ -800,6 +822,7 @@ function startTelegramBot() {
                         [{ text: '👁️ عرض الحسابات المتوفرة', callback_data: 'accounts_view' }],
                         [{ text: '📥 سحب حساب لتسليمه', callback_data: 'accounts_pull' }],
                         [{ text: '✏️ تعديل حساب', callback_data: 'accounts_edit_start' }, { text: '➕ إضافة حساب', callback_data: 'add_account_help' }],
+                        [{ text: '⏳ اشتراكات تنتهي قريباً', callback_data: 'accounts_expiring_soon' }],
                         [{ text: '🔙 رجوع', callback_data: 'menu_main' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]
                     ]
                 }
@@ -824,11 +847,56 @@ function startTelegramBot() {
                     inline_keyboard: [
                         [{ text: '📈 ملخص الواردات', callback_data: 'finances_income' }, { text: '📉 ملخص المصروفات', callback_data: 'finances_expenses' }],
                         [{ text: '➖ إضافة مصروف جديد', callback_data: 'finances_add_expense' }],
+                        [{ text: '📥 تصدير سجل المبيعات', callback_data: 'export_sales_csv' }],
                         [{ text: '🔙 رجوع', callback_data: 'menu_main' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]
                     ]
                 }
             }).catch(() => {});
         }
+
+        else if (data === 'accounts_expiring_soon') {
+            if (!supabase) return;
+            // today up to today + 3
+            const baghdadTime = new Date(Date.now() + (3 * 60 * 60 * 1000));
+            const todayStr = baghdadTime.toISOString().split('T')[0];
+            const threeDaysLater = new Date(baghdadTime.getTime() + (3 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0];
+            
+            await bot?.sendMessage(chatId, '⏳ جاري البحث عن الاشتراكات...');
+            
+            const { data: subs, error } = await supabase.from('subscriptions')
+              .select('id, name, expirationDate, status')
+              .gte('expirationDate', todayStr)
+              .lte('expirationDate', threeDaysLater);
+            
+            if (error || !subs) {
+                await bot?.sendMessage(chatId, `❌ خطأ في جلب الاشتراكات: ${error?.message || ''}`);
+                return;
+            }
+            // filter for sold subscriptions or those with customer info, wait, if it's "مباع", we can alert
+            const soldSubs = subs.filter((s:any) => s.status === 'مباع');
+            
+            if (soldSubs.length === 0) {
+                await bot?.sendMessage(chatId, `✅ لا توجد اشتراكات (مباعة) تنتهي خلال آخر 3 أيام.`);
+                return;
+            }
+            
+            let reply = `⏳ **الاشتراكات التي تنتهي قريباً (خلال 3 أيام):**\n\n`;
+            
+            for (const sub of soldSubs) {
+                 const { data: sale } = await supabase.from('sales')
+                     .select('customerName, customerUsername')
+                     .eq('productName', sub.name)
+                     .order('created_at', { ascending: false })
+                     .limit(1)
+                     .single();
+                 
+                 const customer = sale ? `${sale.customerName} | ${sale.customerUsername || 'بدون معرف'}` : `غير معروف (من مبيعة قديمة)`;
+                 reply += `👤 **الزبون:** ${customer}\n📦 **المنتج:** ${sub.name}\n⏳ **ينتهي في:** ${sub.expirationDate}\n---\n`;
+            }
+            
+            await bot?.sendMessage(chatId, reply, { parse_mode: 'Markdown' });
+        }
+
         else if (data === 'accounts_pull') {
             if (!supabase) throw new Error('Database not connected');
             const { data: subs, error } = await supabase.from('subscriptions').select('name').order('name');
@@ -892,10 +960,20 @@ function startTelegramBot() {
                     // تحذف القائمة السابقة لتجنب الخبصة
                     await bot?.deleteMessage(chatId, query.message?.message_id).catch(() => {});
                     
+                    let instructions = '';
+                    const nLower = acc.name.toLowerCase();
+                    if (nLower.includes('كيم باس') || nLower.includes('gamepass') || nLower.includes('game pass') || nLower.includes('كيمباس')) {
+                         instructions = "\n🛠️ **طريقة تفعيل اشتراك الجيم باس:**\n1️⃣ قم بتسجيل الدخول للحساب في متجر مايكروسوفت (Microsoft Store).\n2️⃣ افتح تطبيق Xbox وتأكد من ربط حسابك الأساسي هناك.\n3️⃣ ابدأ تحميل الألعاب واستمتع! 🎮\n";
+                    } else if (nLower.includes('براكماتا') || nLower.includes('pragmata') || nLower.includes('براكمتا')) {
+                         instructions = "\n🛠️ **تعليمات لعبة براكماتا:**\n1️⃣ افتح منصة Steam في وضع الاوفلاين (Offline Mode).\n2️⃣ سجل الدخول باستخدام اليوزر والباسورد أعلاه.\n3️⃣ لا تقم بتغيير أي معلومات درءاً لفقدان الحساب.\n";
+                    } else if (nLower.includes('نتفلكس') || nLower.includes('netflix')) {
+                         instructions = "\n🛠️ **تعليمات حساب نتفلكس:**\n1️⃣ سجل الدخول في تطبيق Netflix.\n2️⃣ اختر الملف (البروفايل) المخصص لك كما تم ابلاغك.\n3️⃣ يُمنع تغيير الرمز أو الدخول لملفات الآخرين. 🍿\n";
+                    }
+
                     const msgText = `📥 **تفاصيل الحساب المطلوبة:**\n\n` +
                                     `📌 **المنتج:** ${acc.name}\n` +
                                     (acc.notes ? `📝 **ملاحظات:** ${acc.notes}\n` : '') +
-                                    `\n\`\`\`\nاسم الحساب: ${acc.name}\nيوزر: ${acc.account_username || 'لا يوجد'}\nرمز: ${acc.account_password || 'لا يوجد'}\n\`\`\`\n` +
+                                    `\n\`\`\`\nاسم الحساب: ${acc.name}\nيوزر: ${acc.account_username || 'لا يوجد'}\nرمز: ${acc.account_password || 'لا يوجد'}${instructions}\`\`\`\n` +
                                     `*(اضغط على المربع أعلاه للنسخ الشامل)*`;
                     await bot?.sendMessage(chatId, msgText, { 
                         parse_mode: 'Markdown',
@@ -941,7 +1019,11 @@ function startTelegramBot() {
             const newCount = currentCount + 1;
             
             if (!supabase) return;
+            const { data: accToSell } = await supabase.from('subscriptions').select('name').eq('id', accId).single();
             const { error } = await supabase.from('subscriptions').update({ status: 'مباع', sell_count: newCount }).eq('id', accId);
+            if (!error && accToSell) {
+                checkLowStockAlert(chatId, accToSell.name);
+            }
             if (error) {
                 console.error("Supabase Error updating account status:", error);
                 await bot?.sendMessage(chatId, `❌ لتفعيل هذه الميزة، يرجى الذهاب للوحة تحكم Supabase وإضافة عمودين لجدول subscriptions:\n1. status (نوع text)\n2. sell_count (نوع int4)`);
@@ -984,71 +1066,123 @@ function startTelegramBot() {
            const { data: subs, error } = await supabase.from('subscriptions').select('id, name, expirationDate');
            if (error || !subs) {
                console.error("Supabase Error in accounts_view:", JSON.stringify(error));
-               await bot?.sendMessage(chatId, `❌ خطأ في جلب الحسابات: ${error?.message || 'خطأ غير معروف'}`);
+               await bot?.editMessageText(`❌ خطأ في جلب الحسابات: ${error?.message || 'خطأ غير معروف'}`, {
+                   chat_id: chatId, message_id: query.message?.message_id,
+                   reply_markup: {
+                       inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_accounts' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]]
+                   }
+               }).catch(()=>{});
            } else {
                const active = subs.filter(s => !s.expirationDate || new Date(s.expirationDate) >= new Date()).length;
                const expired = subs.filter(s => s.expirationDate && new Date(s.expirationDate) < new Date()).length;
                let msg = `📊 **ملخص الحسابات المتوفرة:**\n\n` + 
                          `✅ إجمالي الحسابات الفعالة متبقية للصلاحية: ${active}\n` +
                          `🚨 الحسابات المنتهية: ${expired}\n\n`;
-               await bot?.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+               await bot?.editMessageText(msg, { 
+                   chat_id: chatId, message_id: query.message?.message_id,
+                   parse_mode: 'Markdown',
+                   reply_markup: {
+                       inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_accounts' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]]
+                   }
+               }).catch(()=>{});
            }
         }
         else if (data === 'sales_view') {
            if (!supabase) return;
            const { data: sls } = await supabase.from('sales').select('id, productName, price, customerName, date').order('created_at', { ascending: false }).limit(5);
            if (!sls || sls.length === 0) {
-               await bot?.sendMessage(chatId, '❌ لا توجد مبيعات بعد.');
+               await bot?.editMessageText('❌ لا توجد مبيعات بعد.', { chat_id: chatId, message_id: query.message?.message_id, reply_markup: { inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_sales' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]] } }).catch(()=>{});
                return;
            }
            let msg = `📜 **آخر 5 مبيعات:**\n\n`;
            sls.forEach((s, idx) => {
-               msg += `${idx+1}. 🛍️ ${s.productName}\n💵 السعر: ${s.price}\n👤 الزبون: ${s.customerName || 'غير معروف'}\n📅 التاريخ: ${s.date || 'غير معروف'}\n🔑 ID: \`${s.id}\`\n---\n`;
+               // Format Date if exists
+               let displayDate = s.date || 'غير معروف';
+               if (displayDate.includes('-')) {
+                  const parts = displayDate.split('T')[0].split('-');
+                  if (parts.length === 3) displayDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+               }
+               msg += `${idx+1}. 🛍️ ${s.productName}\n💵 السعر: ${s.price} د.ع\n👤 الزبون: `${s.customerName || 'غير معروف'}`\n📅 التاريخ: ${displayDate}\n🔑 ID: `${s.id}`\n---\n`;
            });
-           await bot?.deleteMessage(chatId, query.message?.message_id).catch(() => {});
-           await bot?.sendMessage(chatId, msg, { 
+           await bot?.editMessageText(msg, { 
+               chat_id: chatId, message_id: query.message?.message_id,
                parse_mode: 'Markdown',
                reply_markup: {
-                   inline_keyboard: [[{ text: '❌ إغلاق', callback_data: 'close_msg' }]]
+                   inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_sales' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]]
                }
-           });
+           }).catch(()=>{});
         }
         else if (data === 'finances_income') {
            if (!supabase) return;
-           const { data: tx } = await supabase.from('transactions').select('id, amount, description, type').eq('type', 'income').order('created_at', { ascending: false }).limit(5);
+           const { data: tx } = await supabase.from('transactions').select('id, amount, description, type, created_at').eq('type', 'income').order('created_at', { ascending: false }).limit(5);
            let msg = `📈 **ملخص الواردات (آخر 5 حركات):**\n\n`;
            if (tx && tx.length > 0) {
                tx.forEach((t, idx) => {
-                   msg += `${idx+1}. 💵 ${t.amount} د.ع - ${t.description || ''}\n`;
+                   let d = new Date(t.created_at);
+                   let displayDate = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;
+                   msg += `${idx+1}. 💵 ${t.amount} د.ع - ${t.description || ''} (${displayDate})\n`;
                });
            } else {
                msg += 'لا توجد واردات مسجلة مؤخراً.';
            }
-           await bot?.deleteMessage(chatId, query.message?.message_id).catch(() => {});
-           await bot?.sendMessage(chatId, msg, { 
+           await bot?.editMessageText(msg, { 
+               chat_id: chatId, message_id: query.message?.message_id,
                parse_mode: 'Markdown',
                reply_markup: {
-                   inline_keyboard: [[{ text: '❌ إغلاق', callback_data: 'close_msg' }]]
+                   inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_finances' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]]
                }
-           });
+           }).catch(()=>{});
         }
         else if (data === 'finances_expenses') {
            if (!supabase) return;
-           const { data: tx } = await supabase.from('transactions').select('id, amount, description, type').eq('type', 'expense').order('created_at', { ascending: false }).limit(5);
+           const { data: tx } = await supabase.from('transactions').select('id, amount, description, type, created_at').eq('type', 'expense').order('created_at', { ascending: false }).limit(5);
            let msg = `📉 **ملخص المصروفات (آخر 5 حركات):**\n\n`;
            if (tx && tx.length > 0) {
                tx.forEach((t, idx) => {
-                   msg += `${idx+1}. 🔴 ${t.amount} د.ع - ${t.description || ''}\n`;
+                   let d = new Date(t.created_at);
+                   let displayDate = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;
+                   msg += `${idx+1}. 🔴 ${t.amount} د.ع - ${t.description || ''} (${displayDate})\n`;
                });
            } else {
                msg += 'لا توجد مصروفات مسجلة مؤخراً.';
            }
-           await bot?.deleteMessage(chatId, query.message?.message_id).catch(() => {});
-           await bot?.sendMessage(chatId, msg, { 
+           await bot?.editMessageText(msg, { 
+               chat_id: chatId, message_id: query.message?.message_id,
                parse_mode: 'Markdown',
                reply_markup: {
-                   inline_keyboard: [[{ text: '❌ إغلاق', callback_data: 'close_msg' }]]
+                   inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_finances' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]]
                }
+           }).catch(()=>{});
+        }
+
+        else if (data === 'export_sales_csv') {
+           if (!supabase) return;
+           await bot?.sendMessage(chatId, '⏳ جاري تجهيز واستخراج الملف...');
+           const { data: sales, error } = await supabase.from('sales').select('*').order('created_at', { ascending: false });
+           if (error || !sales) {
+               await bot?.sendMessage(chatId, '❌ خطأ في جلب البيانات.');
+               return;
+           }
+           if (sales.length === 0) {
+               await bot?.sendMessage(chatId, '❌ لا توجد مبيعات لتصديرها.');
+               return;
+           }
+           
+           let csvContent = '\uFEFF'; 
+           const headers = Object.keys(sales[0]);
+           csvContent += headers.join(',') + '\n';
+           
+           sales.forEach((row: any) => {
+               const values = headers.map(header => {
+                   const val = row[header] === null || row[header] === undefined ? '' : String(row[header]);
+                   return `"${val.replace(/"/g, '""')}"`;
+               });
+               csvContent += values.join(',') + '\n';
+           });
+           
+           const buffer = Buffer.from(csvContent, 'utf-8');
+           await bot?.sendDocument(chatId, buffer, {}, { filename: `sales_export_${new Date().toISOString().split('T')[0]}.csv`, contentType: 'text/csv' }).catch(e => {
+               console.error("Error sending document:", e);
            });
         }
         else if (data === 'finances_add_expense') {
@@ -1057,12 +1191,69 @@ function startTelegramBot() {
         }
         // Universal edit points
         else if (data === 'accounts_edit_start') {
-            userSessions.set(userId, { step: UserStep.AWAITING_UNIVERSAL_EDIT_ID, data: { module: 'subscriptions' } });
-            await bot?.sendMessage(chatId, '✏️ أرسل المعرف (ID) للحساب الذي تريد تعديله:');
+            if (!supabase) return;
+            const { data: subs } = await supabase.from('subscriptions').select('id, name, account_username').order('created_at', { ascending: false }).limit(10);
+            if (!subs || subs.length === 0) {
+                await bot?.editMessageText('❌ لا توجد حسابات للتعديل.', { chat_id: chatId, message_id: query.message?.message_id, reply_markup: { inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_accounts' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]] } }).catch(()=>{});
+                return;
+            }
+            const keyboard = subs.map((sub: any) => ([{ 
+                text: `✏️ ${sub.name} - ${sub.account_username || 'بدون يوزر'}`, 
+                callback_data: `uedit_a_${sub.id}`
+            }]));
+            keyboard.push([{ text: '🔙 رجوع', callback_data: 'menu_accounts' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]);
+            
+            await bot?.editMessageText('✏️ **تعديل حساب**\nاختر الحساب الذي تريد تعديله من القائمة أدناه:', {
+                chat_id: chatId, message_id: query.message?.message_id, parse_mode: 'Markdown',
+                reply_markup: { inline_keyboard: keyboard }
+            }).catch(() => {});
         }
         else if (data === 'sales_edit_start') {
-            userSessions.set(userId, { step: UserStep.AWAITING_UNIVERSAL_EDIT_ID, data: { module: 'sales' } });
-            await bot?.sendMessage(chatId, '✏️ أرسل المعرف (ID) للمبيعة التي تريد تعديلها:');
+            if (!supabase) return;
+            const { data: sls } = await supabase.from('sales').select('id, productName, customerName').order('created_at', { ascending: false }).limit(10);
+            if (!sls || sls.length === 0) {
+                await bot?.editMessageText('❌ لا توجد مبيعات للتعديل.', { chat_id: chatId, message_id: query.message?.message_id, reply_markup: { inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_sales' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]] } }).catch(()=>{});
+                return;
+            }
+            const keyboard = sls.map((s: any) => ([{ 
+                text: `✏️ ${s.productName} - ${s.customerName || 'مجهول'}`, 
+                callback_data: `uedit_s_${s.id}`
+            }]));
+            keyboard.push([{ text: '🔙 رجوع', callback_data: 'menu_sales' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]);
+            
+            await bot?.editMessageText('✏️ **تعديل مبيعة**\nاختر المبيعة التي تريد تعديلها من القائمة أدناه:', {
+                chat_id: chatId, message_id: query.message?.message_id, parse_mode: 'Markdown',
+                reply_markup: { inline_keyboard: keyboard }
+            }).catch(() => {});
+        }
+        else if (data.startsWith('uedit_a_') || data.startsWith('uedit_s_')) {
+             if (!supabase) return;
+             const isSale = data.startsWith('uedit_s_');
+             const editId = data.replace(/uedit_[as]_/, '');
+             const module = isSale ? 'sales' : 'subscriptions';
+             
+             userSessions.set(userId, { step: UserStep.AWAITING_UNIVERSAL_EDIT_ID, data: { module, editId } }); // Set editId here directly
+             
+             const inline_keyboard = [];
+             if (module === 'sales') {
+                 inline_keyboard.push(
+                     [{ text: 'المنتج', callback_data: 'univ_edit_productName' }, { text: 'السعر', callback_data: 'univ_edit_price' }],
+                     [{ text: 'يوزر / اسم الزبون', callback_data: 'univ_edit_customerName' }, { text: 'الملاحظات', callback_data: 'univ_edit_notes' }]
+                 );
+                 inline_keyboard.push([{ text: '🔙 رجوع', callback_data: 'sales_edit_start' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]);
+             } else if (module === 'subscriptions') {
+                 inline_keyboard.push(
+                     [{ text: 'اسم الحساب', callback_data: 'univ_edit_name' }, { text: 'التصنيف', callback_data: 'univ_edit_category' }],
+                     [{ text: 'اليوزر', callback_data: 'univ_edit_account_username' }, { text: 'الباسورد', callback_data: 'univ_edit_account_password' }],
+                     [{ text: 'تاريخ الانتهاء', callback_data: 'univ_edit_expirationDate' }, { text: 'الملاحظات', callback_data: 'univ_edit_notes' }]
+                 );
+                 inline_keyboard.push([{ text: '🔙 رجوع', callback_data: 'accounts_edit_start' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]);
+             }
+             
+             await bot?.editMessageText('✅ ماذا تريد أن تعدل في السجل المحدد؟', {
+                 chat_id: chatId, message_id: query.message?.message_id, parse_mode: 'Markdown',
+                 reply_markup: { inline_keyboard }
+             }).catch(() => {});
         }
         else if (data.startsWith('univ_edit_')) { 
              const field = data.replace('univ_edit_', '');
@@ -1070,9 +1261,13 @@ function startTelegramBot() {
              if (session && session.step === UserStep.AWAITING_UNIVERSAL_EDIT_ID) {
                  session.step = UserStep.AWAITING_UNIVERSAL_EDIT_VALUE;
                  session.data.field = field;
-                 await bot?.sendMessage(chatId, `أرسل القيمة الجديدة لـ ${field}:`);
-                 await bot?.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: query.message?.message_id });
+                 const backMenu = session.data.module === 'sales' ? 'sales_edit_start' : 'accounts_edit_start';
+                 await bot?.editMessageText(`أرسل القيمة الجديدة لـ ${field}:`, {
+                    chat_id: chatId, message_id: query.message?.message_id,
+                    reply_markup: { inline_keyboard: [[{ text: '🔙 إلغاء التعديل ورجوع', callback_data: backMenu }]] }
+                 }).catch(()=>{});
              }
+        }
         }
         else if (data === 'add_account_help') {
            userSessions.set(userId, { step: UserStep.AWAITING_ACCOUNT_DETAILS, data: {} });
@@ -1179,6 +1374,27 @@ function startTelegramBot() {
 
   console.log('Telegram bot started successfully!');
 } // end startTelegramBot
+
+
+async function checkLowStockAlert(chatId: number, accName: string) {
+    if (!supabase) return;
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const { count, error } = await supabase
+            .from('subscriptions')
+            .select('*', { count: 'exact', head: true })
+            .eq('name', accName)
+            .neq('status', 'مباع')
+            .neq('status', 'منتهي')
+            .or(`expirationDate.is.null,expirationDate.gt.${today},expirationDate.eq.${today}`);
+            
+        if (!error && count !== null && count <= 1) {
+            await bot?.sendMessage(chatId, `⚠️ تنبيه: رصيد [${accName}] على وشك النفاذ! المتبقي: ${count}`);
+        }
+    } catch (e) {
+        console.error('Low stock alert error:', e);
+    }
+}
 
 export async function executeDailyCron() {
   if (!supabase) {
@@ -1368,7 +1584,64 @@ export async function handleTelegramMessage(msg: any) {
 
     if (!text) return;
 
+
+    if (text === '📥 سحب حساب للزبون') {
+        if (!supabase) return;
+        const { data: subs } = await supabase.from('subscriptions').select('name').eq('status', 'فعال');
+        if (!subs || subs.length === 0) {
+            await bot?.sendMessage(chatId, '❌ لا توجد حسابات فعالة حالياً.');
+            return;
+        }
+        const uniqueNames = Array.from(new Set(subs.map(s => s.name).filter(Boolean)));
+        const keyboard = [];
+        for (let i=0; i<uniqueNames.length; i+=2) {
+            const row = [];
+            row.push({ text: uniqueNames[i] as string, callback_data: `pull_acc_${(uniqueNames[i] as string).substring(0, 20)}` });
+            if (i+1 < uniqueNames.length) row.push({ text: uniqueNames[i+1] as string, callback_data: `pull_acc_${(uniqueNames[i+1] as string).substring(0, 20)}` });
+            keyboard.push(row);
+        }
+        keyboard.push([{ text: '❌ إغلاق', callback_data: 'close_msg' }]);
+        await bot?.sendMessage(chatId, '📥 **سحب حساب لتسليمه**\nاختر الاشتراك المطلوب ليتم سحب حساب واحد متاح:', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } });
+        return;
+    }
+    if (text === '🛒 مبيعة سريعة') {
+        if (!supabase) return;
+        const productsRes = await supabase.from('products').select('id, name, sellingPrice').order('name');
+        const products = productsRes.data || [];
+        const keyboard = [];
+        for(let i=0; i<Math.min(products.length, 30); i+=2) {
+            const row = [];
+            row.push({ text: products[i].name, callback_data: `qprod_${products[i].id}` });
+            if (i+1 < products.length) row.push({ text: products[i+1].name, callback_data: `qprod_${products[i+1].id}` });
+            keyboard.push(row);
+        }
+        keyboard.push([{ text: '✍️ غير ذلك (كتابة يدوية)', callback_data: 'qprod_other' }]);
+        keyboard.push([{ text: '❌ إغلاق', callback_data: 'close_msg' }]);
+        await bot?.sendMessage(chatId, '🛒 اختر المنتج من القائمة:', { reply_markup: { inline_keyboard: keyboard } });
+        userSessions.set(userId, { step: UserStep.AWAITING_PRODUCT, data: { products } });
+        return;
+    }
+    if (text === '📊 ملخص اليوم') {
+        const reportText = await generateTodayReport();
+        await bot?.sendMessage(chatId, reportText);
+        return;
+    }
+    if (text === '🔍 بحث شامل') {
+        userSessions.set(userId, { step: 'AWAITING_SEARCH' as unknown as UserStep, data: {} });
+        await bot?.sendMessage(chatId, '🔍 أرسل كلمة البحث (اسم، يوزر، أو معرف):');
+        return;
+    }
+
     if (text === '/start' || text === 'قائمة' || text === '/menu' || text === 'القائمة') {
+      await bot?.sendMessage(chatId, 'جاري تحميل لوحة التحكم السريعة...', {
+          reply_markup: {
+              keyboard: [
+                [{ text: '📥 سحب حساب للزبون' }, { text: '🛒 مبيعة سريعة' }],
+                [{ text: '📊 ملخص اليوم' }, { text: '🔍 بحث شامل' }]
+              ],
+              resize_keyboard: true
+          }
+      });
       await bot?.sendMessage(chatId, 'أهلاً بك يا مدير في المساعد الذكي لـ Ludex Store! 🤖\nاختر من القائمة الرئيسية:', {
         reply_markup: {
           inline_keyboard: [
@@ -1629,6 +1902,9 @@ export async function handleTelegramMessage(msg: any) {
                  if (!supabase) return;
                  const newSellCount = (session.data.accountSellCount || 0) + 1;
                  const { error: accErr } = await supabase.from('subscriptions').update({ status: 'مباع', sell_count: newSellCount }).eq('id', session.data.accountId);
+                 if (!accErr) {
+                     checkLowStockAlert(chatId, session.data.accountName);
+                 }
                  if (accErr) {
                      console.error("Error updating account status:", accErr);
                      await bot?.sendMessage(chatId, '⚠️ حدث خطأ أثناء تحديث حالة الحساب في المخزون.');
@@ -1774,6 +2050,30 @@ export async function handleTelegramMessage(msg: any) {
              return;
         }
 
+
+        if (session.step === 'AWAITING_SEARCH' as unknown as UserStep) {
+             if (!supabase) return;
+             const searchTerms = `%${text.trim()}%`;
+             const { data: sales } = await supabase.from('sales').select('*').or(`productName.ilike.${searchTerms},customerName.ilike.${searchTerms},customerUsername.ilike.${searchTerms},notes.ilike.${searchTerms}`).limit(10);
+             const { data: subs } = await supabase.from('subscriptions').select('*').or(`name.ilike.${searchTerms},account_username.ilike.${searchTerms},notes.ilike.${searchTerms}`).limit(10);
+             
+             let reply = `🔍 نتائج البحث عن "${text}":\n\n`;
+             if (sales && sales.length > 0) {
+                 reply += `🛒 **المبيعات:**\n`;
+                 sales.forEach((s: any) => reply += `- ${s.productName} لـ ${s.customerName} (${s.price} د.ع)\n`);
+                 reply += '\n';
+             }
+             if (subs && subs.length > 0) {
+                 reply += `📂 **الحسابات:**\n`;
+                 subs.forEach((s: any) => reply += `- ${s.name} | يوزر: ${s.account_username} (${s.status})\n`);
+             }
+             if ((!sales || sales.length === 0) && (!subs || subs.length === 0)) {
+                 reply += '❌ لم يتم العثور على أي نتائج.';
+             }
+             await bot?.sendMessage(chatId, reply);
+             userSessions.delete(userId);
+             return;
+        }
         if (session.step === UserStep.AWAITING_EXPENSE_AMOUNT) {
              const amount = Number(text.replace(/[^\d.]/g, ''));
              if (isNaN(amount) || amount <= 0) {
