@@ -1877,9 +1877,12 @@ export async function handleTelegramMessage(msg: any) {
     const linesCheck = messageContent.split('\n').map((p: any) => p.trim()).filter((p: any) => !!p);
     const looksLikeSaleDetails = linesCheck.length >= 2 && !isNaN(parsePrice(linesCheck[0])) && !messageContent.startsWith('إضافة') && !messageContent.startsWith('بيع') && !messageContent.startsWith('/');
 
+    const directWords = ['📥 سحب حساب للزبون', '🛒 مبيعة سريعة', '🛒 سلة مشتريات', '📚 الردود السريعة', '📊 ملخص اليوم', '⚙️ الإعدادات', '🔍 بحث شامل', 'قائمة', 'القائمة', 'تقرير'];
+    const isDirectWord = directWords.includes(messageContent.trim());
+
     // 1. بالخاص ما يحتاج منشن، بالكروب يحتاج منشن او ريبلاي
     // إذا الرسالة مو للبوت، تجاهلها بصمت تام (بدون رسالة خطأ)
-    if (!messageContent || (!isPrivate && !isMention && !isReplyToBot && !isCommand && !isUserInSession && !looksLikeSaleDetails)) {
+    if (!messageContent || (!isPrivate && !isMention && !isReplyToBot && !isCommand && !isUserInSession && !looksLikeSaleDetails && !isDirectWord)) {
         console.log(`Dropped message: No mention of ${BOT_USERNAME} and not a reply to bot.`);
         return;
     }
