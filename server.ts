@@ -1,8 +1,6 @@
 import express from "express";
 import cors from 'cors';
 import TelegramBot from 'node-telegram-bot-api';
-import { GoogleGenAI } from '@google/genai';
-import Groq from 'groq-sdk';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { execSync } from 'child_process';
@@ -383,102 +381,6 @@ try {
   console.error('Error initializing Supabase:', e);
 }
 
-// إعداد الذكاء الاصطناعي Gemini يتم عند الحاجة (Lazy Loading) لتجنب أخطاء بدء التشغيل
-let _aiClient: any = null;
-export let _aiKeyMode: 'gemini' | 'groq' | 'nvidia' = 'gemini';
-
-function getAiClient() {
-  if (!_aiClient) {
-    let key = process.env.CUSTOM_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || process.env.NVIDIA_API_KEY || '';
-    key = key.replace(/['"]/g, '').trim();
-    if (!key) {
-      throw new Error('GEMINI_API_KEY is not set');
-    }
-    console.log(`Debug: Using API_KEY starting with: ${key.substring(0, 5)}...`);
-    
-    if (key.startsWith('gsk_')) {
-      _aiKeyMode = 'groq';
-      const groq = new Groq({ apiKey: key });
-      _aiClient = {
-        models: {
-          generateContent: async (opts: any) => {
-            const systemInst = opts.config?.systemInstruction || "";
-            const messages = [];
-            if (systemInst) messages.push({ role: 'system', content: systemInst });
-            messages.push({ role: 'user', content: opts.contents });
-            
-            const completion = await groq.chat.completions.create({
-              messages: messages as any,
-              model: opts.model,
-              response_format: opts.config?.responseMimeType === "application/json" ? { type: "json_object" } : undefined
-            });
-            return { text: completion.choices[0]?.message?.content || "" };
-          },
-          list: async () => {
-             const res = await groq.models.list();
-             return res.data.map((m: any) => ({ name: m.id }));
-          }
-        }
-      };
-    } else if (key.startsWith('nvapi-')) {
-      _aiKeyMode = 'nvidia';
-      _aiClient = {
-        models: {
-          generateContent: async (opts: any) => {
-            const systemInst = opts.config?.systemInstruction || "";
-            const messages = [];
-            if (systemInst) messages.push({ role: 'system', content: systemInst });
-            messages.push({ role: 'user', content: opts.contents });
-            
-            const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${key}`
-              },
-              body: JSON.stringify({
-                model: opts.model,
-                messages: messages,
-                response_format: opts.config?.responseMimeType === "application/json" ? { type: "json_object" } : undefined
-              })
-            });
-            
-            if (!res.ok) {
-              const body = await res.text();
-              throw new Error(`Nvidia API error: ${res.status} ${body}`);
-            }
-            
-            const completion = await res.json();
-            return { text: completion.choices[0]?.message?.content || "" };
-          },
-          list: async () => {
-             return [{ name: 'meta/llama-3.1-70b-instruct' }, { name: 'meta/llama-3.1-8b-instruct' }];
-          }
-        }
-      };
-    } else {
-      _aiKeyMode = 'gemini';
-      if (!key.startsWith('AIza')) {
-         console.warn('Warning: GEMINI_API_KEY does not start with AIza, it might be invalid.');
-      }
-      _aiClient = new GoogleGenAI({ apiKey: key });
-    }
-  }
-  return _aiClient;
-}
-
-export function getModelsToTry() {
-  if (!_aiClient) getAiClient();
-  if (_aiKeyMode === 'groq') {
-    // تم تحديث القائمة لإزالة النماذج المتوقفة عن العمل واستخدام النماذج الحديثة المتاحة
-    return ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'];
-  }
-  if (_aiKeyMode === 'nvidia') {
-    return ['meta/llama-3.1-70b-instruct', 'meta/llama-3.1-8b-instruct'];
-  }
-  return ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
-}
-
 // إعداد بوت التليكرام
 let token = process.env.TELEGRAM_BOT_TOKEN?.replace(/['"]/g, '');
 // تجاهل التوكن القديم إذا كان لا يزال موجوداً في متغيرات البيئة
@@ -490,366 +392,7 @@ let bot: TelegramBot | null = null;
 // --- نهاية دوال مساعدة الذكاء الاصطناعي ---
 
 async function processBotMessage(text: string, supabase: any): Promise<string> {
-  if (!supabase) {
-    throw new Error('قاعدة البيانات غير متصلة.');
-  }
-
-  // جلب ملخص من قاعدة البيانات لتوفير سياق
-  const [customers, products, sales, transactions, subscriptions] = await Promise.all([
-    supabase.from('customers').select('name, username, customer_number').order('customer_number', { ascending: false }).limit(5),
-    supabase.from('products').select('name, sellingPrice, costPrice'),
-    supabase.from('sales').select('id, productName, price, date, customerName, notes').order('created_at', { ascending: false }).limit(20),
-    supabase.from('transactions').select('id, type, amount, date, description, person').order('created_at', { ascending: false }).limit(20),
-    supabase.from('subscriptions').select('id, name, category, account_username, account_password, notes').order('activationDate', { ascending: false }).limit(50).then((res: any) => res).catch(() => ({ data: [] }))
-  ]);
-  
-  const currentDate = new Date().toISOString().split('T')[0];
-  const systemInstruction = `
-  تاريخ اليوم هو: ${currentDate}
-  أنت مساعد ذكي ومدير مبيعات لمتجر Ludex Store وتتحدث باللهجة العراقية اللطيفة والمحترمة (بدون تكلف).
-  مهمتك قراءة رسالة مدير المتجر وتحديد الإجراء المطلوب بدقة واحترافية.
-  لا تفترض القائمة أو تخمن، اقرأ السياق بذكاء:
-  - إذا قال "سجل مبيعة" أو ذكر اسم منتج مباع ومشتري وسعر -> القائمة "سجل البيع" (sales).
-  - إذا قال "صرفنا" أو "مصروف" أو "تسديد دين" أو أموال واردة غير المبيعات -> القائمة "سجل المالية" (transactions).
-  - إذا قال "اشتراك جديد" أو عطى يوزر وباسورد أو سأل عن حساب -> "سجل الحسابات" (subscriptions).
-  
-  دائماً أرجع الرد بصيغة JSON حصراً بدون أي نصوص قبلها أو بعدها، التزم بـ JSON فقط:
-  
-  لإضافة مبيعة (سجل البيع):
-  {
-    "action": "insert_sale",
-    "sale_data": {
-      "customerName": "اسم الزبون", "customerUsername": "يوزر الزبون (بدون @)", "productName": "المنتج", "price": السعر رقماً, "paymentMethod": "طريقة الدفع", "notes": "ملاحظات إضافية فقط"
-    },
-    "message": "رسالة تأكيد بشوشة باللهجة العراقية"
-  }
-
-  لإضافة مصروف أو إيراد (سجل المالية):
-  {
-    "action": "insert_transaction",
-    "transaction_data": {
-      "type": "expense" (اختاره للمصروف) أو "income" (اختاره للوارد),
-      "description": "تفاصيل المعاملة", "amount": المبلغ رقماً, "person": "الجهة المستلمة/الدافعة", "notes": "ملاحظات"
-    },
-    "message": "رسالة تأكيد مهنية باللهجة العراقية"
-  }
-
-  لإضافة حساب/اشتراك (سجل الحسابات):
-  {
-    "action": "insert_subscription",
-    "subscription_data": {
-      "name": "اسم الاشتراك/الحساب (كيم باس، نتفلكس، الخ)",
-      "category": "التصنيف المذكور نصاً في الرسالة (مثلاً: إذا كتب 'اشتراك' فضعه كما كتبه 'اشتراك')، وإذا لم يذكر استنتجه",
-      "activationDate": "تاريخ التفعيل (أمس أو اليوم إذا لم يُذكر، بصيغة YYYY-MM-DD)",
-      "expirationDate": "تاريخ الانتهاء المرجح (بصيغة YYYY-MM-DD). ملاحظة مهمة جداً: إذا ذكر المدير مدة مثل '60 يوم' أو 'شهرين' أو نحو ذلك، يجب عليك حساب تاريخ الانتهاء بإضافة هذه المدة إلى تاريخ التفعيل بدقة.",
-      "account_username": "الايميل/اليوزر",
-      "account_password": "الباسورد",
-      "notes": "المدة أو ملاحظات أخرى"
-    },
-    "message": "تأكيد لطيف بإضافة الاشتراك"
-  }
-
-  لتعديل أو حذف (modify_record):
-  {
-    "action": "modify_record",
-    "operation": "delete" للحذف أو "update" للتعديل,
-    "table": "sales" أو "transactions" أو "subscriptions",
-    "target_id": "انسخ الـ id (UUID) الخاص بالسجل من البيانات المرفقة كما هو حرفياً وبدون أي تغييرات",
-    "update_data": {} // الحقول والقيم الجديدة للتعديل فقط بالصيغة الصحيحة. مثلاً إذا طلب دمج ملاحظة، ادمجها مع الملاحظة المرفقة ببيانات هذا ID وضع النتيجة هنا. 
-  }
-  ملاحظة هامة جداً: إذا طلب المدير تعديلاً (مثلاً "خلي الملاحظة انباع سويج") يجب أن تقرأ السجل الموجود ضمن "البيانات الحالية" وتعرف محتواه وتصنع "update_data" متكامل. 
-  إذا لم تتمكن من العثور على السجل في البيانات المرفقة، لا تخمن ID أبداً كأن تضع رقماً عشوائياً، بل رد بـ "reply" واطلب منه توضيح أو تحديد السجل.
-
-  للإجابة عن أسئلة أو تلخيص (reply):
-  {
-    "action": "reply",
-    "message": "ردك الذكي والمنسق بشكل مرتب جداً باستخدام الماركداون (نقاط، خطوط عريضة، جداول بسيطة) وبلهجة عراقية محترفة بناءً على الأرقام والبيانات المتوفرة."
-  }
-  `;
-
-  const baghdadTime = new Date(Date.now() + (3 * 60 * 60 * 1000));
-  const context = `
-  وقت بغداد الحالي: ${baghdadTime.toLocaleString('ar-IQ')}
-  البيانات الحالية للرجوع إليها:
-  - معلومات المنتجات: ${JSON.stringify(products.data)}
-  - أحدث 20 عملية بيع (للعثور على id): ${JSON.stringify(sales.data)}
-  - أحدث 20 مصروف/إيراد: ${JSON.stringify(transactions.data)}
-  - أحدث 20 حساب/اشتراك: ${JSON.stringify(subscriptions.data)}
-  
-  رسالة المدير: ${text}
-  `;
-
-  const modelsToTry = getModelsToTry();
-  let response;
-  const ai = getAiClient();
-
-  for (let i = 0; i < modelsToTry.length; i++) {
-    try {
-      response = await ai.models.generateContent({
-        model: modelsToTry[i],
-        contents: context,
-        config: {
-          systemInstruction: systemInstruction,
-          responseMimeType: "application/json"
-        }
-      });
-      break; // Success
-    } catch (err: any) {
-      if (i === modelsToTry.length - 1) throw err;
-      console.warn(`Model ${modelsToTry[i]} failed, trying next... Error: ${err.message}`);
-    }
-  }
-  
-  if (!response) throw new Error("Failed to generate content.");
-
-  let textT = typeof response.text === 'function' ? response.text() : response.text;
-  console.log("Raw LLM response:", textT);
-  
-  if (textT) {
-    textT = textT.replace(/```json\n?/ig, '').replace(/```\n?/g, '').trim();
-  }
-
-  let parsed: any = {};
-  try {
-    parsed = JSON.parse(textT || "{}");
-  } catch (err) {
-    console.error("Failed to parse LLM JSON response:", err);
-    parsed = { action: 'reply', message: textT };
-  }
-
-  const dateStr = baghdadTime.toISOString().split('T')[0];
-  const nowStr = new Date().toISOString(); 
-
-  if (parsed.action === 'insert_sale' && parsed.sale_data) {
-    const d = parsed.sale_data;
-    const price = Number(d.price) || 0;
-    
-    // Check or create customer
-    let custCode = 'C' + Math.random().toString(36).substring(2, 6).toUpperCase() + Math.random().toString().substring(2, 5);
-    let queryCust = supabase.from('customers').select('id, name, customer_code, customer_number').limit(1);
-    
-    // Clean username if provided
-    let cleanUsername = d.customerUsername ? d.customerUsername.replace(/@/g, '').trim().toLowerCase() : null;
-    let cleanName = d.customerName ? d.customerName.trim().toLowerCase() : null;
-    
-    // Fetch all to bypass JSONB type mismatch errors with ilike
-    const { data: allCusts } = await supabase.from('customers').select('id, name, customer_code, customer_number, total_spent');
-    let existingCust: any[] = [];
-    
-    if (allCusts) {
-      for (const c of allCusts) {
-        let cName = typeof c.name === 'string' ? c.name.toLowerCase() : (c.name ? JSON.stringify(c.name).toLowerCase() : '');
-        let cUser = typeof c.username === 'string' ? c.username.toLowerCase() : (c.username ? JSON.stringify(c.username).toLowerCase() : '');
-        
-        let matched = false;
-        if (cleanUsername && cUser === cleanUsername) {
-          matched = true;
-        } else if (cleanName && cName === cleanName) {
-          matched = true;
-        }
-        
-        if (matched) {
-          existingCust.push(c);
-          break; // Stop at first match
-        }
-      }
-    }
-    
-    let previousBuyerAlert = "";
-    const promises: Promise<any>[] = [];
-
-    // Optional promise if it's existing customer
-    let updateCustomerPromise: Promise<any> | null = null;
-    let createCustomerPromise: Promise<any> | null = null;
-    let previousSalesPromise: Promise<any> | null = null;
-
-    if (existingCust && existingCust.length > 0) {
-      const customer = existingCust[0];
-      custCode = customer.customer_code;
-      
-      const newTotal = (Number(customer.total_spent) || 0) + price;
-      const newCount = (Number(customer.purchase_count) || 0) + 1;
-      updateCustomerPromise = supabase.from('customers').update({ total_spent: newTotal, purchase_count: newCount }).eq('id', customer.id).then(({error}) => {
-          if (error && error.message.includes('purchase_count')) {
-              return supabase!.from('customers').update({ total_spent: newTotal }).eq('id', customer.id);
-          }
-          return {error};
-      });
-      
-      previousSalesPromise = supabase.from('sales')
-        .select('date')
-        .eq('customerCode', custCode)
-        .order('date', { ascending: false });
-    } else {
-      createCustomerPromise = supabase.from('customers').select('customer_number').order('customer_number', { ascending: false }).limit(1).then(({ data: maxData }) => {
-        let nextNumber = 1;
-        if (maxData && maxData.length > 0 && maxData[0].customer_number) {
-          nextNumber = parseInt(maxData[0].customer_number) + 1;
-        }
-        const insertCust: any = { name: d.customerName || 'مجهول', username: d.customerUsername || null, customer_code: custCode, customer_number: nextNumber, total_spent: price, purchase_count: 1 };
-        return supabase!.from('customers').insert([insertCust]).then(({error}) => {
-            if (error && error.message.includes('purchase_count')) {
-                delete insertCust.purchase_count;
-                return supabase!.from('customers').insert([insertCust]);
-            }
-            return {error};
-        });
-      });
-    }
-
-    // Since we need the ID of the new sale for the transaction note, we can insert sale, then transaction
-    // Or generate a fake ID. But wait, newSale[0]?.id is generated by Supabase UUID.
-    // Let's generate a random UUID so we can insert both at the same time.
-    const saleId = crypto.randomUUID();
-
-    const salePromise = supabase.from('sales').insert([{
-      id: saleId, productName: d.productName || 'غير محدد', price, customerName: d.customerName || 'مجهول', customerUsername: d.customerUsername || null, customerCode: custCode, date: dateStr, notes: d.notes || ''
-    }]).select();
-
-    const transPromise = supabase.from('transactions').insert([{
-      type: 'income', amount: price, date: dateStr, description: d.productName || 'مبيعة ذكية', person: d.customerName || 'مجهول', username: d.customerUsername || null, notes: `[تلقائي] رقم المبيعة: [${saleId}]`
-    }]);
-
-    // Push all concurrent operations
-    if (updateCustomerPromise) promises.push(updateCustomerPromise);
-    if (createCustomerPromise) promises.push(createCustomerPromise);
-    if (previousSalesPromise) promises.push(previousSalesPromise);
-    promises.push(salePromise);
-    promises.push(transPromise);
-
-    const results = await Promise.all(promises);
-    
-    // We need to find the specific results. salePromise is always 2nd to last, transPromise is last.
-    const saleRes = results[results.length - 2];
-    const transRes = results[results.length - 1];
-
-    if (saleRes.error) {
-      if (saleRes.error.message.includes('row-level security')) {
-        return `❌ ما صعدت البيعة للقاعدة لأن البوت ما عنده صلاحية (RLS).\n\nالحل: روح على إعدادات الـ Secrets وضيف مفتاح جديد اسمه:\nSUPABASE_SERVICE_ROLE_KEY\nتلكاه بلوحة تحكم Supabase بقسم API.`;
-      }
-      return `❌ خطأ في البيعة: ${saleRes.error.message}`;
-    }
-
-    let customerSummary = '';
-    if (existingCust && existingCust.length > 0) {
-      const customer = existingCust[0];
-      const purchaseCount = (Number(customer.purchase_count) || 0) + 1;
-      const totalSpent = (Number(customer.total_spent) || 0) + price;
-      
-      let lastDateInfo = '';
-      if (previousSalesPromise) {
-        const prevSalesRes = results[1];
-        if (prevSalesRes && prevSalesRes.data && prevSalesRes.data.length > 0) {
-           lastDateInfo = `\n📅 تاريخ آخر شراء: \`${prevSalesRes.data[0].date}\``;
-        }
-      }
-      
-      customerSummary = `\n\n---\n✅ معلومات الزبون (مشتري سابق - سهلة النسخ):\nالاسم: \`${customer.name}\`\nعدد مرات الشراء: \`${purchaseCount}\`\nكود الزبون: \`${customer.customer_code}\`\nالمبلغ الكلي: \`${totalSpent}\`${lastDateInfo}`;
-    } else {
-      customerSummary = `\n\n---\n✅ معلومات الزبون (زبون جديد - سهلة النسخ):\nالاسم: \`${d.customerName || 'مجهول'}\`\nعدد مرات الشراء: \`1\`\nكود الزبون: \`${custCode}\`\nالمبلغ الكلي: \`${price}\``;
-    }
-
-    if (transRes.error) return `⚠️ المبيعة تسجلت بس بدون واردات: ${transRes.error.message}${customerSummary}`;
-    return `✅ تمت المبيعة!\n\n${parsed.message || ''}${customerSummary}`;
-  } 
-  else if (parsed.action === 'insert_transaction' && parsed.transaction_data) {
-    const d = parsed.transaction_data;
-    const { error } = await supabase.from('transactions').insert([{
-      type: d.type === 'income' ? 'income' : 'expense', amount: Number(d.amount)||0, date: dateStr, description: d.description || (d.type === 'income' ? 'إيراد' : 'مصروف'), person: d.person || 'جهة', notes: d.notes||''
-    }]);
-    if (error) return `❌ خطأ بالعملية المالية: ${error.message}`;
-    return (d.type === 'income' ? `💸 تم تسجيل الإيراد المالي!` : `💸 تم تسجيل المصروف!`) + `\n\n` + (parsed.message || '');
-  }
-  else if (parsed.action === 'insert_subscription' && parsed.subscription_data) {
-    const d = parsed.subscription_data;
-    const { error } = await supabase.from('subscriptions').insert([{
-      name: d.name || 'حساب ذكي',
-      category: d.category || 'عام',
-      activationDate: d.activationDate || null,
-      expirationDate: d.expirationDate || null,
-      account_username: d.account_username || null,
-      account_password: d.account_password || null,
-      notes: d.notes || ''
-    }]);
-    if (error) return `❌ خطأ في الإضافة لسجل الحسابات: ${error.message}`;
-    return `✅ تم تسجيل الحساب / الاشتراك بنجاح في سجل الحسابات!\n\n` + (parsed.message || '');
-  }
-  else if (parsed.action === 'modify_record' && parsed.target_id) {
-    // التأكد من أن الـ id بصيغة صالحة (UUID)
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    // نتأكد فقط إذا كان الـ id طويل ويشبه الـ UUID، وإذا لم يكن، نحاول الاعتماد عليه كمعرف رقمي أو سلسلة نصية عادية حسب قاعدة البيانات، 
-    // ولكن الغالب أنها UUID. سنعطي صلاحية لـ DB أن ترفض ولكن نتجنب القيم الوهمية بالعربي.
-    if (parsed.target_id.match(/[\u0600-\u06FF]/)) {
-       return `عذراً، لم أتمكن من العثور على السجل المطلوب للتعديل. يرجى توضيح العملية بشكل أدق.`;
-    }
-
-    if (parsed.operation === 'delete') {
-      if (parsed.table === 'sales') {
-         const { data: saleToDel } = await supabase.from('sales').select('*').eq('id', parsed.target_id).single();
-         const { data: deletedSale, error } = await supabase.from('sales').delete().eq('id', parsed.target_id).select('id');
-         if (error) return `❌ صار خطأ بالحذف: ${error.message}`;
-         if (!deletedSale || deletedSale.length === 0) return `⚠️ دزيت امر الحذف بس المبيعة مموجودة (يمكن الـ ID غلط أو انحذفت مسبقاً).`;
-
-         if (saleToDel) {
-            const price = Number(saleToDel.price) || 0;
-            const custCode = saleToDel.customerCode;
-            
-            // Delete associated transactions
-            await supabase.from('transactions').delete().or(`notes.ilike.%[تلقائي] رقم المبيعة المرجعي: [${parsed.target_id}]%,notes.ilike.%[تلقائي] رقم المبيعة: [${parsed.target_id}]%`);
-            
-            // Update or Delete the customer
-            if (custCode) {
-                const { data: customer } = await supabase.from('customers').select('id, total_spent, purchase_count').eq('customer_code', custCode).single();
-                if (customer) {
-                    const newCount = (Number(customer.purchase_count) || 1) - 1;
-                    const newTotal = (Number(customer.total_spent) || 0) - price;
-                    
-                    if (newCount <= 0) {
-                        await supabase.from('customers').delete().eq('id', customer.id);
-                    } else {
-                        const updates: any = { purchase_count: newCount, total_spent: newTotal };
-                        const { error: custUpdateError } = await supabase.from('customers').update(updates).eq('id', customer.id);
-                        if (custUpdateError && custUpdateError.message.includes('purchase_count')) {
-                            delete updates.purchase_count;
-                            await supabase.from('customers').update(updates).eq('id', customer.id);
-                        }
-                    }
-                }
-            }
-         }
-         return `✅ تم الحذف من المبيعات والقوائم المرتبطة بنجاح!`;
-      } else {
-         const { data, error } = await supabase.from(parsed.table).delete().eq('id', parsed.target_id).select('id');
-         if (error) return `❌ صار خطأ بالحذف: ${error.message}`;
-         if (!data || data.length === 0) return `⚠️ دزيت امر الحذف بس السجل مموجود بهالـ ID، حاول توضح أكثر أو تسوي ريبلاي للسجل اللي تريده.`;
-         return `✅ تم الحذف بنجاح!`;
-      }
-    } else if (parsed.operation === 'update' && parsed.update_data) {
-      if (parsed.table === 'sales') {
-         const { data, error } = await supabase.from('sales').update(parsed.update_data).eq('id', parsed.target_id).select('id');
-         if (error) return `❌ صار خطأ بالتعديل: ${error.message}`;
-         if (!data || data.length === 0) return `⚠️ دزيت امر التعديل بس المبيعة مموجودة (يمكن الـ ID غلط أو انحذفت).`;
-         
-         // Update associated transaction
-         const transUpdate: any = {};
-         if (parsed.update_data.price !== undefined) transUpdate.amount = parsed.update_data.price;
-         if (parsed.update_data.productName !== undefined) transUpdate.description = parsed.update_data.productName;
-         if (parsed.update_data.date !== undefined) transUpdate.date = parsed.update_data.date;
-         
-         if (Object.keys(transUpdate).length > 0) {
-            await supabase.from('transactions').update(transUpdate).or(`notes.ilike.%[تلقائي] رقم المبيعة المرجعي: [${parsed.target_id}]%,notes.ilike.%[تلقائي] رقم المبيعة: [${parsed.target_id}]%`);
-         }
-         return `✅ تم تعديل المبيعة بنجاح!`;
-      } else {
-         const { data, error } = await supabase.from(parsed.table).update(parsed.update_data).eq('id', parsed.target_id).select('id');
-         if (error) return `❌ صار خطأ بالتعديل: ${error.message}`;
-         if (!data || data.length === 0) return `⚠️ دزيت امر التعديل بس السجل مموجود بهالـ ID، حاول توضح أكثر أو تسوي ريبلاي للسجل اللي تريده.`;
-         return `✅ تم تعديل معلوماتك بنجاح وسيفتهة بالداتا بيس!`;
-      }
-    }
-  }
-  
-  return parsed.message || 'عذراً ما فهمت.';
+  return 'عذراً، يرجى استخدام القائمة والأزرار التفاعلية لإدارة المتجر.\nلفتح القائمة اضغط /start أو انقر على زر القائمة في الأسفل.';
 }
 
 async function generateTodayReport() {
@@ -1683,40 +1226,19 @@ export async function executeDailyCron() {
     return;
   }
 
-  const context = `
-  اكتب ملخص سريع جداً وبدون لغوة زايدة لمبيعات آخر 24 ساعة لمتجر Ludex.
-  المطلوب:
-  1. إجمالي المبيعات (رقم فقط).
-  2. عدد المبيعات والحسابات والزبائن الجدد.
-  3. نقطتين لأهم الصفقات (إذا اكو).
-  لا تكتب مقدمات وخواتيم طويلة. استخدم أسلوب واتساب سريع ومباشر.
-  البيانات:
-  - المبيعات (${salesData.length}): ${JSON.stringify(salesData)}
-  - المعاملات (${transData.length}): ${JSON.stringify(transData)}
-  - الزبائن (${custData.length}): ${JSON.stringify(custData)}
-  `;
-
-  const modelsToTry = getModelsToTry();
-  let response;
-  const ai = getAiClient();
-
-  for (let i = 0; i < modelsToTry.length; i++) {
-    try {
-      response = await ai.models.generateContent({
-        model: modelsToTry[i],
-        contents: context,
-        config: {
-          systemInstruction: "أنت مدير مالي صارم وسريع. تعطي الزبدة والأرقام فقط باللهجة العراقية بدون مقدمات ولا كلام زايد.",
-        }
-      });
-      break; // Success
-    } catch (err: any) {
-      if (i === modelsToTry.length - 1) throw err;
-      console.warn(`Model ${modelsToTry[i]} failed for daily report, trying next... Error: ${err.message}`);
-    }
-  }
-
-  const reportText = response?.text || 'عذراً، لم أتمكن من توليد التقرير اليومي.';
+  
+  const salesCount = salesData.length || 0;
+  const transCount = transData.length || 0;
+  const custCount = custData.length || 0;
+  
+  const totalSales = salesData.reduce((acc: number, curr: any) => acc + (Number(curr.price) || 0), 0);
+  
+  let reportText = `إجمالي المبيعات اليوم: ${totalSales} د.ع\n\n`;
+  reportText += `تفاصيل الحركة:\n`;
+  reportText += `- عدد المبيعات: ${salesCount}\n`;
+  reportText += `- الزبائن الجدد: ${custCount}\n`;
+  reportText += `- حركات صندوق المالية: ${transCount}\n`;
+  
 
   // Ensure bot is initialized
   if (!bot && process.env.TELEGRAM_BOT_TOKEN) {
@@ -1884,27 +1406,22 @@ export async function handleTelegramMessage(msg: any) {
                 supabase.from('customers').select('name, username, customer_number').gte('created_at', startISO).lte('created_at', endISO).then((res: any) => res).catch(() => ({ data: [] }))
             ]);
             
-            const context = `
-            اكتب ملخص سريع جداً وبدون لغوة زايدة لمبيعات آخر 24 ساعة لمتجر Ludex.
-            المطلوب:
-            1. إجمالي المبيعات (رقم فقط).
-            2. عدد المبيعات والحسابات والزبائن الجدد.
-            3. نقطتين لأهم الصفقات (إذا اكو).
-            لا تكتب مقدمات وخواتيم طويلة. استخدم أسلوب واتساب سريع ومباشر.
             
-            البيانات:
-            - المبيعات (${newSales.data?.length || 0}): ${JSON.stringify(newSales.data || [])}
-            - المعاملات (${newTransactions.data?.length || 0}): ${JSON.stringify(newTransactions.data || [])}
-            - الزبائن (${newCustomers.data?.length || 0}): ${JSON.stringify(newCustomers.data || [])}
-            `;
+            const salesCount = newSales.data?.length || 0;
+            const transCount = newTransactions.data?.length || 0;
+            const custCount = newCustomers.data?.length || 0;
             
-            const ai = getAiClient();
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: context,
-                config: { systemInstruction: "أنت مدير مالي صارم وسريع. تعطي الزبدة والأرقام فقط باللهجة العراقية بدون مقدمات ولا كلام زايد." }
-            });
-            await bot?.sendMessage(chatId, `📊 التقرير اليومي التلقائي (تجربة) 📊\n\n${response?.text}`);
+            const totalSales = (newSales.data || []).reduce((acc: number, curr: any) => acc + (Number(curr.price) || 0), 0);
+            
+            let reportMsg = `📊 التقرير اليومي التلقائي 📊\n\n`;
+            reportMsg += `إجمالي المبيعات اليوم: ${totalSales} د.ع\n\n`;
+            reportMsg += `تفاصيل الحركة:\n`;
+            reportMsg += `- عدد المبيعات: ${salesCount}\n`;
+            reportMsg += `- الزبائن الجدد: ${custCount}\n`;
+            reportMsg += `- حركات صندوق المالية: ${transCount}\n`;
+            
+            await bot?.sendMessage(chatId, reportMsg, { parse_mode: 'Markdown' });
+
         } catch (err: any) {
              await bot?.sendMessage(chatId, '❌ خطأ: ' + err.message);
         }

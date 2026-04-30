@@ -12,7 +12,6 @@
     "start": "tsx server.ts"
   },
   "dependencies": {
-    "@google/genai": "^1.29.0",
     "@supabase/supabase-js": "^2.98.0",
     "@tailwindcss/vite": "^4.1.14",
     "@types/node-telegram-bot-api": "^0.64.14",
@@ -22,7 +21,6 @@
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^4.22.1",
-    "groq-sdk": "^1.1.2",
     "html2pdf.js": "^0.14.0",
     "jsonwebtoken": "^9.0.3",
     "jspdf": "^4.2.0",
