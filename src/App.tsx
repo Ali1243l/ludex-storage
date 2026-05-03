@@ -171,9 +171,13 @@ export default function App() {
         alert(`حدث خطأ أثناء التعديل: ${error.message}`);
       }
     } else {
+      const shortCode = '#' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      const accountCodeEntry = `\nكود الحساب: ${shortCode}`;
+      const finalNotes = payload.notes ? payload.notes + accountCodeEntry : 'كود الحساب: ' + shortCode;
+      
       const { error } = await supabase
         .from('subscriptions')
-        .insert([{ ...payload, status: 'فعال', sell_count: 0 }]);
+        .insert([{ ...payload, notes: finalNotes, status: 'فعال', sell_count: 0 }]);
         
       if (error) {
         console.error("Error inserting:", error);

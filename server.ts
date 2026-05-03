@@ -673,14 +673,16 @@ async function processCartCheckout(chatId: number, userId: number, session: User
     // SEND MAIN DIGITAL RECEIPT
     const invoiceNumber = invoiceId.split('-')[0].toUpperCase();
     const summary = cart.map((p: any) => p.name).join(', ');
-    const invoiceMsg = `🧾 **فاتورة شراء - Ludex Store** 🧾\n\n` +
+    
+    // In Cart, the accounts details are in pulledAccountsText already, but having the receipt copyable is nice.
+    const invoiceMsgStr = `🧾 فاتورة شراء 🧾\n\n` +
                        `🔖 رقم الطلب: #${invoiceNumber}\n` +
                        `📅 التاريخ: ${dateStr}\n\n` +
-                       `👤 اسم المتجر: Ludex Store\n` +
                        `👤 اسم الزبون: ${session.data.customerName}\n` +
                        `📦 المنتجات (${cart.length}): ${summary}\n` +
                        `💵 المبلغ المدفوع الكلي: ${Number(session.data.price).toLocaleString()} د.ع\n\n` +
-                       `✨ **شكراً لثقتكم بنا!** ✨`;
+                       `✨ شكراً لثقتكم بنا! ✨`;
+    const invoiceMsg = '```\n' + invoiceMsgStr + '\n```';
     await bot?.sendMessage(chatId, invoiceMsg, { parse_mode: 'Markdown' }).catch(()=>{});
     
     // SEND ACCOUNTS DETAILS
@@ -881,14 +883,24 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
     
     // إرسال الفاتورة الرقمية (Digital Receipt) للزبون
     const invoiceNumber = saleId.split('-')[0].toUpperCase();
-    const invoiceMsg = `🧾 **فاتورة شراء - Ludex Store** 🧾\n\n` +
+    let dynamicAccountDetails = '';
+    
+    if (session.data.accountUsernameForInvoice || session.data.accountPasswordForInvoice) {
+        dynamicAccountDetails += `📧 الإيميل/اليوزر: ${session.data.accountUsernameForInvoice || 'لا يوجد'}\n` +
+                                 `🔐 الرمز: ${session.data.accountPasswordForInvoice || 'لا يوجد'}\n`;
+    }
+
+    const invoiceMsgStr = `🧾 فاتورة شراء 🧾\n\n` +
                        `🔖 رقم الطلب: #${invoiceNumber}\n` +
                        `📅 التاريخ: ${dateStr}\n\n` +
-                       `👤 اسم المتجر: Ludex Store\n` +
                        `👤 اسم الزبون: ${session.data.customerName}\n` +
                        `📦 المنتج: ${session.data.productName}\n` +
-                       `💵 المبلغ المدفوع: ${Number(session.data.price).toLocaleString()} د.ع\n\n` +
-                       `✨ **شكراً لثقتكم بنا!** ✨`;
+                       `💵 المبلغ المدفوع: ${Number(session.data.price).toLocaleString()} د.ع\n` +
+                       (dynamicAccountDetails ? `\n${dynamicAccountDetails}` : '') +
+                       `\n✨ شكراً لثقتكم بنا! ✨`;
+                       
+    const invoiceMsg = '```\n' + invoiceMsgStr + '\n```';
+    
     await bot?.sendMessage(chatId, invoiceMsg, { parse_mode: 'Markdown' }).catch(()=>{});
 
     userSessions.delete(userId);
@@ -2177,7 +2189,10 @@ export async function handleTelegramMessage(msg: any) {
                 }
                 
                 const notes = notesArr.join('\n');
-                
+                const shortCode = '#' + Math.random().toString(36).substring(2, 8).toUpperCase();
+                const accountCodeEntry = `\nكود الحساب: ${shortCode}`;
+                const finalNotes = notes ? notes + accountCodeEntry : 'كود الحساب: ' + shortCode;
+
                 if (!supabase) throw new Error('قاعدة البيانات غير متصلة');
                 
                 const { error } = await supabase.from('subscriptions').insert([{
@@ -2187,7 +2202,7 @@ export async function handleTelegramMessage(msg: any) {
                     expirationDate,
                     account_username,
                     account_password,
-                    notes,
+                    notes: finalNotes,
                     status: 'فعال',
                     sell_count: 0
                 }]);
@@ -2195,7 +2210,7 @@ export async function handleTelegramMessage(msg: any) {
                 if (error) {
                     await bot?.sendMessage(chatId, `❌ لم يتم حفظ الحساب. السبب: ${error.message}`);
                 } else {
-                    await bot?.sendMessage(chatId, `✅ تم إضافة الحساب بنجاح!\n\n🔹 الحساب: ${name}\n🔹 التصنيف: ${category}\n🔹 اليوزر: ${account_username}\n🔹 الرمز: ${account_password}\n🔹 التفعيل: ${activationDate}\n🔹 الانتهاء: ${expirationDate}\n${notes ? `📝 الملاحظات: ${notes}` : ''}`);
+                    await bot?.sendMessage(chatId, `✅ تم إضافة الحساب بنجاح!\n\n🔹 الحساب: ${name}\n🔹 التصنيف: ${category}\n🔹 اليوزر: ${account_username}\n🔹 الرمز: ${account_password}\n🔹 كود الحساب (للبيع السريع): \`${shortCode}\`\n🔹 التفعيل: ${activationDate}\n🔹 الانتهاء: ${expirationDate}\n${notes ? `📝 الملاحظات: ${notes}` : ''}`);
                 }
             } else {
                 await bot?.sendMessage(chatId, '❌ الصيغة غير مكتملة. يجب أن تكون بهذا النسق:\n\nإضافة حساب\nاسم الحساب\nالتصنيف\nتاريخ التفعيل\nتاريخ الانتهاء\nاليوزر - الباسورد\nالملاحظات');
@@ -2323,53 +2338,6 @@ export async function handleTelegramMessage(msg: any) {
              return;
         }
 
-        if (session.step === UserStep.AWAITING_QUICK_SALE_DETAILS) {
-             const lines = text.split('\n').map(p => p.trim()).filter(p => !!p);
-             const parts = text.includes('\n') ? lines : text.split(',').map(p => p.trim()).filter(p => !!p);
-             
-             if (parts.length >= 2) {
-                 const priceStr = parts[0];
-                 const price = parsePrice(priceStr);
-                 if (isNaN(price)) {
-                     await bot?.sendMessage(chatId, '⚠️ يجب أن يكون السطر/القسم الأول رقماً يمثل السعر.\nأعد الإرسال مجدداً:');
-                     return;
-                 }
-                 const customerStr = parts[1];
-                 const customer = parseCustomer(customerStr);
-                 let notes = parts.slice(2).join('\n');
-                 if (notes.includes('(هذه الرسالة هي رد على:')) {
-                     notes = notes.split('(هذه الرسالة هي رد على:')[0].trim();
-                 }
-                 
-                 session.data.price = price;
-                 session.data.customerName = customer.name;
-                 session.data.customerUsername = customer.username;
-                 session.data.notes = notes;
-                 session.data.productName = session.data.accountName;
-                 session.data.isQuickSale = true;
-                 
-                 // 1. Update account status
-                 if (!supabase) return;
-                 const newSellCount = (session.data.accountSellCount || 0) + 1;
-                 const { error: accErr } = await supabase.from('subscriptions').update({ status: 'مباع', sell_count: newSellCount }).eq('id', session.data.accountId);
-                 if (!accErr) {
-                     checkLowStockAlert(chatId, session.data.accountName);
-                 }
-                 if (accErr) {
-                     console.error("Error updating account status:", accErr);
-                     await bot?.sendMessage(chatId, '⚠️ حدث خطأ أثناء تحديث حالة الحساب في المخزون.');
-                 }
-                 
-                 // 2. Save Sale
-                 await saveSaleAndSendReceipt(chatId, userId, session);
-                 
-             } else {
-                 await bot?.sendMessage(chatId, '⚠️ البيانات غير مكتملة، يجب إرسال السعر ثم الزبون على الأقل. أعد الإرسال مجدداً بشكل صحيح:');
-             }
-             return;
-        }
-
-
         if (session.step === 'AWAITING_TEMPLATE_ADDING' as any) {
              const lines = text.split('\n').map((p: string) => p.trim()).filter((p: string) => !!p);
              if (lines.length >= 2) {
@@ -2431,6 +2399,76 @@ export async function handleTelegramMessage(msg: any) {
              }
              return;
         }
+
+        if (session.step === UserStep.AWAITING_QUICK_SALE_DETAILS) {
+             const lines = text.split('\n').map(p => p.trim()).filter(p => !!p);
+             const parts = text.includes('\n') ? lines : text.split(',').map(p => p.trim()).filter(p => !!p);
+             
+             if (parts.length >= 2) {
+                 const priceStr = parts[0];
+                 const price = parsePrice(priceStr);
+                 if (isNaN(price)) {
+                     await bot?.sendMessage(chatId, '⚠️ يجب أن يكون السطر/القسم الأول رقماً يمثل السعر.\nأعد الإرسال مجدداً:');
+                     return;
+                 }
+                 const customerName = parts[1];
+                 let customerUsername = '';
+                 let notesStartIndex = 2;
+
+                 if (parts.length > 2) {
+                     const p2 = parts[2];
+                     if (p2 === '-' || p2.toLowerCase() === 'لا يوجد') {
+                         customerUsername = '';
+                         notesStartIndex = 3;
+                     } else if (!p2.includes(' ') || p2.startsWith('@') || /^[a-zA-Z0-9_\-\.]+$/.test(p2)) {
+                         customerUsername = p2;
+                         notesStartIndex = 3;
+                     }
+                 }
+
+                 let notes = parts.slice(notesStartIndex).join('\n');
+                 if (notes.includes('(هذه الرسالة هي رد على:')) {
+                     notes = notes.split('(هذه الرسالة هي رد على:')[0].trim();
+                 }
+                 
+                 // Fetch account credentials to append
+                 if (supabase && session.data.accountId) {
+                     const { data: accData } = await supabase.from('subscriptions').select('account_username, account_password').eq('id', session.data.accountId).maybeSingle();
+                     if (accData && (accData.account_username || accData.account_password)) {
+                         notes += `\nاليوزر: ${accData.account_username || 'لا يوجد'}\nالرمز: ${accData.account_password || 'لا يوجد'}`;
+                         session.data.accountUsernameForInvoice = accData.account_username;
+                         session.data.accountPasswordForInvoice = accData.account_password;
+                     }
+                 }
+                 
+                 session.data.price = price;
+                 session.data.customerName = customerName;
+                 session.data.customerUsername = customerUsername;
+                 session.data.notes = notes;
+                 session.data.productName = session.data.accountName;
+                 session.data.isQuickSale = true;
+                 
+                 // 1. Update account status
+                 if (!supabase) return;
+                 const newSellCount = (session.data.accountSellCount || 0) + 1;
+                 const { error: accErr } = await supabase.from('subscriptions').update({ status: 'مباع', sell_count: newSellCount }).eq('id', session.data.accountId);
+                 if (!accErr) {
+                     checkLowStockAlert(chatId, session.data.accountName);
+                 }
+                 if (accErr) {
+                     console.error("Error updating account status:", accErr);
+                     await bot?.sendMessage(chatId, '⚠️ حدث خطأ أثناء تحديث حالة الحساب في المخزون.');
+                 }
+                 
+                 // 2. Save Sale
+                 await saveSaleAndSendReceipt(chatId, userId, session);
+                 
+             } else {
+                 await bot?.sendMessage(chatId, '⚠️ البيانات غير مكتملة، يجب إرسال السعر ثم الزبون على الأقل. أعد الإرسال مجدداً بشكل صحيح:');
+             }
+             return;
+        }
+
         if (session.step === UserStep.AWAITING_SALE_DETAILS) {
              const lines = text.split('\n').map(p => p.trim()).filter(p => !!p);
              const parts = text.includes('\n') ? lines : text.split(',').map(p => p.trim()).filter(p => !!p);
@@ -2442,17 +2480,45 @@ export async function handleTelegramMessage(msg: any) {
                      await bot?.sendMessage(chatId, '⚠️ يجب أن يكون السطر/القسم الأول رقماً يمثل السعر.\nأعد الإرسال مجدداً:');
                      return;
                  }
-                 const customerStr = parts[1];
-                 const customer = parseCustomer(customerStr);
-                 let notes = parts.slice(2).join('\n');
-                 // إزالة جملة "هذه الرسالة هي رد على" من الملاحظات إن وجدت
+                 
+                 const customerName = parts[1];
+                 let customerUsername = '';
+                 let notesStartIndex = 2;
+
+                 if (parts.length > 2) {
+                     const p2 = parts[2];
+                     if (p2 === '-' || p2.toLowerCase() === 'لا يوجد') {
+                         customerUsername = '';
+                         notesStartIndex = 3;
+                     } else if (!p2.includes(' ') || p2.startsWith('@') || /^[a-zA-Z0-9_\-\.]+$/.test(p2)) {
+                         customerUsername = p2;
+                         notesStartIndex = 3;
+                     }
+                 }
+
+                 let notes = parts.slice(notesStartIndex).join('\n');
                  if (notes.includes('(هذه الرسالة هي رد على:')) {
                      notes = notes.split('(هذه الرسالة هي رد على:')[0].trim();
                  }
                  
+                 // Check for short code matching
+                 const codeMatch = text.match(/#[A-Za-z0-9]{6}/);
+                 if (codeMatch && supabase) {
+                     const accCode = codeMatch[0].toUpperCase();
+                     const { data: accData } = await supabase.from('subscriptions').select('*').ilike('notes', `%${accCode}%`).maybeSingle();
+                     if (accData) {
+                         notes += `\nاليوزر: ${accData.account_username || 'لا يوجد'}\nالرمز: ${accData.account_password || 'لا يوجد'}`;
+                         const newCount = (accData.sell_count || 0) + 1;
+                         await supabase.from('subscriptions').update({ status: 'مباع', sell_count: newCount }).eq('id', accData.id);
+                         session.data.accountUsernameForInvoice = accData.account_username;
+                         session.data.accountPasswordForInvoice = accData.account_password;
+                         session.data.productName = accData.name || session.data.productName; // Auto adjust product name if it was a code
+                     }
+                 }
+                 
                  session.data.price = price;
-                 session.data.customerName = customer.name;
-                 session.data.customerUsername = customer.username;
+                 session.data.customerName = customerName;
+                 session.data.customerUsername = customerUsername;
                  session.data.notes = notes;
                  
                  await saveSaleAndSendReceipt(chatId, userId, session);
