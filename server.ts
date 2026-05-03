@@ -2754,9 +2754,63 @@ export async function handleTelegramMessage(msg: any) {
         }
 
         if (session.step === UserStep.AWAITING_ACCOUNT_DETAILS) {
-             text = "هذه تفاصيل اشتراك/حساب جديد (subscriptions) يرجى تسجيله بدقة كاشتراك حصراً وليس كمبيعة أبداً. التفاصيل: \n" + text;
+             const parts = text.split('\n').map(p => p.trim()).filter(p => !!p);
+             if (parts.length >= 5) {
+                 const name = parts[0];
+                 const category = parts[1];
+                 const activationDate = parts[2] === '-' ? '' : parts[2];
+                 const expirationDate = parts[3] === '-' ? '' : parts[3];
+                 const credentialsStr = parts[4];
+                 const price = parts.length > 5 ? parts[5] : '';
+                 const notesArr = parts.slice(6);
+                 
+                 let account_username = '';
+                 let account_password = '';
+                 if (credentialsStr.includes('-')) {
+                     const credParts = credentialsStr.split('-');
+                     account_username = credParts[0].trim();
+                     account_password = credParts.slice(1).join('-').trim();
+                 } else if (credentialsStr.includes(':')) {
+                     const credParts = credentialsStr.split(':');
+                     account_username = credParts[0].trim();
+                     account_password = credParts.slice(1).join(':').trim();
+                 } else {
+                     account_username = credentialsStr;
+                 }
+                 
+                 let notes = notesArr.join('\n');
+                 if (price && price !== '-' && price !== 'لا يوجد') {
+                     notes = `السعر: ${price}\n` + notes;
+                 }
+
+                 const shortCode = '#' + Math.random().toString(36).substring(2, 8).toUpperCase();
+                 const accountCodeEntry = `\nكود الحساب: ${shortCode}`;
+                 const finalNotes = notes ? notes + accountCodeEntry : 'كود الحساب: ' + shortCode;
+
+                 if (supabase) {
+                     const { error } = await supabase.from('subscriptions').insert([{
+                         name,
+                         category,
+                         activationDate,
+                         expirationDate,
+                         account_username,
+                         account_password,
+                         notes: finalNotes,
+                         status: 'فعال',
+                         sell_count: 0
+                     }]);
+                     
+                     if (error) {
+                         await bot?.sendMessage(chatId, `❌ لم يتم حفظ الحساب. السبب: ${error.message}`);
+                     } else {
+                         await bot?.sendMessage(chatId, `✅ تم إضافة الحساب بنجاح!\n\n🔹 الحساب: ${name}\n🔹 التصنيف: ${category}\n🔹 اليوزر: ${account_username}\n🔹 الرمز: ${account_password}\n🔹 كود الحساب (للبيع السريع): \`${shortCode}\`\n🔹 التفعيل: ${activationDate}\n🔹 الانتهاء: ${expirationDate}\n${notes ? `📝 الملاحظات: ${notes}` : ''}`);
+                     }
+                 }
+             } else {
+                 await bot?.sendMessage(chatId, '❌ الصيغة غير مكتملة. الرجاء إرسال جميع التفاصيل المطلوبة.');
+             }
              userSessions.delete(userId);
-             // Skip return to fall through to AI
+             return;
         } else if (session.step === UserStep.AWAITING_PRODUCT_DETAILS) {
              const parts = text.split('\n').map(p => p.trim()).filter(p => !!p);
              if (parts.length >= 2) {
