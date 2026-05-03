@@ -497,7 +497,9 @@ export enum UserStep {
   AWAITING_UNIVERSAL_EDIT_VALUE = "AWAITING_UNIVERSAL_EDIT_VALUE",
   AWAITING_CART_PRODUCT = "AWAITING_CART_PRODUCT",
   AWAITING_CART_DETAILS = "AWAITING_CART_DETAILS",
-  AWAITING_WARRANTY_DETAILS = "AWAITING_WARRANTY_DETAILS"
+  AWAITING_WARRANTY_DETAILS = "AWAITING_WARRANTY_DETAILS",
+  AWAITING_ACCOUNT_EXPENSE_AMOUNT = "AWAITING_ACCOUNT_EXPENSE_AMOUNT",
+  AWAITING_ACCOUNT_EXPENSE_PERSON = "AWAITING_ACCOUNT_EXPENSE_PERSON"
 }
 
 export interface UserState {
@@ -1021,6 +1023,7 @@ function startTelegramBot() {
                     inline_keyboard: [
                         [{ text: '📂 قسم الحسابات', callback_data: 'menu_accounts' }],
                         [{ text: '🛒 قسم سجل المبيعات', callback_data: 'menu_sales' }],
+                        [{ text: '🧑‍🤝‍🧑 قسم الزبائن', callback_data: 'menu_customers' }],
                         [{ text: '💸 قسم المالية والمصروفات', callback_data: 'menu_finances' }],
                         [{ text: '❌ إغلاق', callback_data: 'close_msg' }]
                     ]
@@ -1109,6 +1112,18 @@ function startTelegramBot() {
                     inline_keyboard: [
                         [{ text: '➕ إضافة مبيعة', callback_data: 'start_sale_wizard' }],
                         [{ text: '📜 آخر المبيعات', callback_data: 'sales_view' }, { text: '✏️ تعديل مبيعة', callback_data: 'sales_edit_start' }],
+                        [{ text: '🔙 رجوع', callback_data: 'menu_main' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]
+                    ]
+                }
+            }).catch(() => {});
+        }
+        else if (data === 'menu_customers') {
+            await bot?.editMessageText('🧑‍🤝‍🧑 **قسم الزبائن**\nاختر الإجراء المطلوب:', {
+                chat_id: chatId, message_id: query.message?.message_id, parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '🔝 أعلى 10 زبائن', callback_data: 'customers_view_top' }],
+                        [{ text: '📋 قائمة الزبائن', callback_data: 'customers_view_list' }],
                         [{ text: '🔙 رجوع', callback_data: 'menu_main' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]
                     ]
                 }
@@ -1367,6 +1382,44 @@ function startTelegramBot() {
                    }
                }).catch(()=>{});
            }
+        }
+        else if (data === 'customers_view_top') {
+           if (!supabase) return;
+           const { data: custs } = await supabase.from('customers').select('*').order('total_spent', { ascending: false }).limit(10);
+           if (!custs || custs.length === 0) {
+               await bot?.editMessageText('❌ لا يوجد زبائن مسجلين.', { chat_id: chatId, message_id: query.message?.message_id, reply_markup: { inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_customers' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]] } }).catch(()=>{});
+               return;
+           }
+           let msg = `🔝 **أعلى 10 زبائن حسب المبلغ الكلي:**\n\n`;
+           custs.forEach((c, idx) => {
+               msg += `${idx+1}. 👤 **${c.name}**\n💵 المبلغ: ${c.total_spent || 0} د.ع  |  🛒 عدد المشتريات: ${c.purchase_count || 0}\n🔑 كود: ${c.customer_code}\n${c.customer_username ? '@' + c.customer_username : 'بدون يوزر'}\n---\n`;
+           });
+           await bot?.editMessageText(msg, { 
+               chat_id: chatId, message_id: query.message?.message_id,
+               parse_mode: 'Markdown',
+               reply_markup: {
+                   inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_customers' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]]
+               }
+           }).catch(()=>{});
+        }
+        else if (data === 'customers_view_list') {
+           if (!supabase) return;
+           const { data: custs } = await supabase.from('customers').select('*').order('created_at', { ascending: false }).limit(20);
+           if (!custs || custs.length === 0) {
+               await bot?.editMessageText('❌ لا يوجد زبائن مسجلين.', { chat_id: chatId, message_id: query.message?.message_id, reply_markup: { inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_customers' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]] } }).catch(()=>{});
+               return;
+           }
+           let msg = `📋 **قائمة أحدث 20 زبون:**\n\n`;
+           custs.forEach((c, idx) => {
+               msg += `👤 **${c.name}**\n💵 ${c.total_spent || 0} د.ع  |  🛒 ${c.purchase_count || 0} طلب\n🔑 كود: ${c.customer_code}\n---\n`;
+           });
+           await bot?.editMessageText(msg, { 
+               chat_id: chatId, message_id: query.message?.message_id,
+               parse_mode: 'Markdown',
+               reply_markup: {
+                   inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_customers' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]]
+               }
+           }).catch(()=>{});
         }
         else if (data === 'sales_view') {
            if (!supabase) return;
@@ -2080,6 +2133,7 @@ export async function handleTelegramMessage(msg: any) {
           inline_keyboard: [
             [{ text: '📂 قسم الحسابات', callback_data: 'menu_accounts' }],
             [{ text: '🛒 قسم سجل المبيعات', callback_data: 'menu_sales' }],
+            [{ text: '🧑‍🤝‍🧑 قسم الزبائن', callback_data: 'menu_customers' }],
             [{ text: '💸 قسم المالية والمصروفات', callback_data: 'menu_finances' }],
             [{ text: '❌ إغلاق', callback_data: 'close_msg' }]
           ]
@@ -2755,15 +2809,80 @@ export async function handleTelegramMessage(msg: any) {
 
         if (session.step === UserStep.AWAITING_ACCOUNT_DETAILS) {
              const parts = text.split('\n').map(p => p.trim()).filter(p => !!p);
-             if (parts.length >= 5) {
+             if (parts.length >= 3) {
                  const name = parts[0];
                  const category = parts[1];
-                 const activationDate = parts[2] === '-' ? '' : parts[2];
-                 const expirationDate = parts[3] === '-' ? '' : parts[3];
-                 const credentialsStr = parts[4];
-                 const price = parts.length > 5 ? parts[5] : '';
-                 const notesArr = parts.slice(6);
                  
+                 let credIndex = -1;
+                 for (let i = 2; i < parts.length; i++) {
+                     if (/[a-zA-Z]/.test(parts[i]) || parts[i].includes('@') || i === parts.length - 1) { 
+                         credIndex = i;
+                         break;
+                     }
+                 }
+                 if (credIndex === -1) credIndex = 2; // Default fallback
+
+                 let datesStr = parts.slice(2, credIndex);
+                 let actDate = '';
+                 let expDate = '';
+
+                 const parseRelativeDate = (dateStr: string, fromDateStr?: string) => {
+                     const today = fromDateStr ? new Date(fromDateStr) : new Date(Date.now() + (3 * 60 * 60 * 1000));
+                     if (!dateStr || dateStr === '-') return '';
+                     if (dateStr.includes('اليوم')) return today.toISOString().split('T')[0];
+                     
+                     const daysMatch = dateStr.match(/(\d+)\s*(يوم|ايام|أيام)/);
+                     if (daysMatch) {
+                         today.setDate(today.getDate() + parseInt(daysMatch[1], 10));
+                         return today.toISOString().split('T')[0];
+                     }
+                     const monthsMatch = dateStr.match(/(\d+)\s*(شهر|اشهر|أشهر|شهور)/);
+                     if (monthsMatch) {
+                          today.setMonth(today.getMonth() + parseInt(monthsMatch[1], 10));
+                          return today.toISOString().split('T')[0];
+                     }
+                     const yearsMatch = dateStr.match(/(\d+)\s*(سنة|سنين|سنوات)/);
+                     if (yearsMatch) {
+                          today.setFullYear(today.getFullYear() + parseInt(yearsMatch[1], 10));
+                          return today.toISOString().split('T')[0];
+                     }
+                     return dateStr;
+                 };
+
+                 if (datesStr.length === 2) {
+                     actDate = parseRelativeDate(datesStr[0]);
+                     expDate = parseRelativeDate(datesStr[1], actDate);
+                 } else if (datesStr.length === 1) {
+                     if (datesStr[0].match(/يوم|شهر|سنة|ايام|سنوات|اشهر/)) {
+                         actDate = parseRelativeDate('اليوم');
+                         expDate = parseRelativeDate(datesStr[0], actDate);
+                     } else {
+                         actDate = parseRelativeDate(datesStr[0]);
+                     }
+                 }
+
+                 let credentialsStr = parts[credIndex] || '';
+                 let nextIndex = credIndex + 1;
+                 
+                 // If the next line is also mostly English (like a password for a username on previous line)
+                 if (nextIndex < parts.length && /[a-zA-Z0-9]/.test(parts[nextIndex]) && !parts[nextIndex].match(/[\u0600-\u06FF]/)) {
+                     credentialsStr += ' - ' + parts[nextIndex];
+                     nextIndex++;
+                 }
+
+                 let price = '';
+                 let notesArr: string[] = [];
+                 if (nextIndex < parts.length) {
+                     price = parts[nextIndex];
+                     notesArr = parts.slice(nextIndex + 1);
+                 }
+
+                 // If price looks like notes, move to notes
+                 if (price && !/\d/.test(price) && price !== '-' && price !== 'لا يوجد') {
+                     notesArr.unshift(price);
+                     price = '';
+                 }
+
                  let account_username = '';
                  let account_password = '';
                  if (credentialsStr.includes('-')) {
@@ -2791,8 +2910,8 @@ export async function handleTelegramMessage(msg: any) {
                      const { error } = await supabase.from('subscriptions').insert([{
                          name,
                          category,
-                         activationDate,
-                         expirationDate,
+                         activationDate: actDate,
+                         expirationDate: expDate,
                          account_username,
                          account_password,
                          notes: finalNotes,
@@ -2802,12 +2921,54 @@ export async function handleTelegramMessage(msg: any) {
                      
                      if (error) {
                          await bot?.sendMessage(chatId, `❌ لم يتم حفظ الحساب. السبب: ${error.message}`);
+                         userSessions.delete(userId);
                      } else {
-                         await bot?.sendMessage(chatId, `✅ تم إضافة الحساب بنجاح!\n\n🔹 الحساب: ${name}\n🔹 التصنيف: ${category}\n🔹 اليوزر: ${account_username}\n🔹 الرمز: ${account_password}\n🔹 كود الحساب (للبيع السريع): \`${shortCode}\`\n🔹 التفعيل: ${activationDate}\n🔹 الانتهاء: ${expirationDate}\n${notes ? `📝 الملاحظات: ${notes}` : ''}`);
+                         userSessions.set(userId, { step: UserStep.AWAITING_ACCOUNT_EXPENSE_AMOUNT, data: { productName: name } });
+                         await bot?.sendMessage(chatId, `✅ تم حفظ الحساب في المخزن بنجاح.\n\n💸 الآن، كم المبلغ الذي صرفته لشراء هذا الحساب؟ (أرسل الرقم فقط، أو أرسل 0 لتخطي هذه الخطوة)`);
                      }
                  }
              } else {
                  await bot?.sendMessage(chatId, '❌ الصيغة غير مكتملة. الرجاء إرسال جميع التفاصيل المطلوبة.');
+                 userSessions.delete(userId);
+             }
+             return;
+        } else if (session.step === UserStep.AWAITING_ACCOUNT_EXPENSE_AMOUNT) {
+             const cleanedStr = text.replace(/[^\d.]/g, '');
+             if (cleanedStr === '') {
+                 await bot?.sendMessage(chatId, '⚠️ الرجاء إدخال رقم صحيح للمبلغ (أو 0 للتخطي).');
+                 return;
+             }
+             const amount = Number(cleanedStr);
+             if (amount === 0) {
+                 await bot?.sendMessage(chatId, '✅ تم تخطي إضافة المصروف. اكتملت العملية.');
+                 userSessions.delete(userId);
+                 return;
+             }
+             session.data.amount = amount;
+             userSessions.set(userId, { step: UserStep.AWAITING_ACCOUNT_EXPENSE_PERSON, data: session.data });
+             await bot?.sendMessage(chatId, '👤 من قام بدفع هذا المبلغ؟ (أرسل اسم الشخص، مثلاً: علي، أو من الصندوق)');
+             return;
+        } else if (session.step === UserStep.AWAITING_ACCOUNT_EXPENSE_PERSON) {
+             const person = text.trim();
+             const amount = session.data.amount;
+             const productName = session.data.productName;
+             const baghdadTime = new Date(Date.now() + (3 * 60 * 60 * 1000));
+             const dateStr = baghdadTime.toISOString().split('T')[0];
+             
+             if (supabase) {
+                 const { error } = await supabase.from('transactions').insert([{
+                     type: 'expense',
+                     amount: amount,
+                     date: dateStr,
+                     description: `شراء حسابات للمنتج: ${productName}`,
+                     person: person
+                 }]);
+                 
+                 if (error) {
+                     await bot?.sendMessage(chatId, `❌ حدث خطأ أثناء إضافة المصروف: ${error.message}`);
+                 } else {
+                     await bot?.sendMessage(chatId, `✅ تم تسجيل الحساب في المخزن وإضافة مبلغ ${amount} كـ مصروف بنجاح!`);
+                 }
              }
              userSessions.delete(userId);
              return;
