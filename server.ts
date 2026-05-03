@@ -2187,7 +2187,9 @@ export async function handleTelegramMessage(msg: any) {
                     expirationDate,
                     account_username,
                     account_password,
-                    notes
+                    notes,
+                    status: 'فعال',
+                    sell_count: 0
                 }]);
                 
                 if (error) {

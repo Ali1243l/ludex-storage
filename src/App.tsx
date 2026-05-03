@@ -173,7 +173,7 @@ export default function App() {
     } else {
       const { error } = await supabase
         .from('subscriptions')
-        .insert([payload]);
+        .insert([{ ...payload, status: 'فعال', sell_count: 0 }]);
         
       if (error) {
         console.error("Error inserting:", error);
