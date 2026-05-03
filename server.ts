@@ -675,13 +675,20 @@ async function processCartCheckout(chatId: number, userId: number, session: User
     const summary = cart.map((p: any) => p.name).join(', ');
     
     // In Cart, the accounts details are in pulledAccountsText already, but having the receipt copyable is nice.
+    const strictNotes = session.data.notes?.trim() || '';
+    let extraDetails = '';
+    if (strictNotes) {
+        extraDetails = `\n📌 الملاحظات:\n${strictNotes}\n`;
+    }
+
     const invoiceMsgStr = `🧾 فاتورة شراء 🧾\n\n` +
                        `🔖 رقم الطلب: #${invoiceNumber}\n` +
                        `📅 التاريخ: ${dateStr}\n\n` +
                        `👤 اسم الزبون: ${session.data.customerName}\n` +
                        `📦 المنتجات (${cart.length}): ${summary}\n` +
-                       `💵 المبلغ المدفوع الكلي: ${Number(session.data.price).toLocaleString()} د.ع\n\n` +
-                       `✨ شكراً لثقتكم بنا! ✨`;
+                       `💵 المبلغ المدفوع الكلي: ${Number(session.data.price).toLocaleString()} د.ع\n` +
+                       extraDetails +
+                       `\n✨ شكراً لثقتكم بنا! ✨`;
     const invoiceMsg = '```\n' + invoiceMsgStr + '\n```';
     await bot?.sendMessage(chatId, invoiceMsg, { parse_mode: 'Markdown' }).catch(()=>{});
     
@@ -888,6 +895,11 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
     if (session.data.accountUsernameForInvoice || session.data.accountPasswordForInvoice) {
         dynamicAccountDetails += `📧 الإيميل/اليوزر: ${session.data.accountUsernameForInvoice || 'لا يوجد'}\n` +
                                  `🔐 الرمز: ${session.data.accountPasswordForInvoice || 'لا يوجد'}\n`;
+        if (strictNotes && (!session.data.accountUsernameForInvoice || !strictNotes.includes(session.data.accountUsernameForInvoice))) {
+            dynamicAccountDetails += `📝 ملاحظات: ${strictNotes.split('\n').join(' - ')}\n`;
+        }
+    } else if (strictNotes) {
+        dynamicAccountDetails += `📌 معلومات الحساب / الملاحظات:\n${strictNotes}\n`;
     }
 
     const invoiceMsgStr = `🧾 فاتورة شراء 🧾\n\n` +
