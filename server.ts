@@ -2926,7 +2926,7 @@ export async function handleTelegramMessage(msg: any) {
                          userSessions.delete(userId);
                      } else {
                          userSessions.set(userId, { step: UserStep.AWAITING_ACCOUNT_EXPENSE_AMOUNT, data: { productName: name } });
-                         await bot?.sendMessage(chatId, `✅ تم حفظ الحساب في المخزن بنجاح.\n\n💸 الآن، كم المبلغ الذي صرفته لشراء هذا الحساب؟ (أرسل الرقم فقط، أو أرسل 0 لتخطي هذه الخطوة)`);
+                         await bot?.sendMessage(chatId, `✅ تم حفظ الحساب في المخزن بنجاح.\n\n💸 الآن، كم المبلغ الذي صرفته لشراء هذا الحساب؟ ومن قام بدفعه؟\n\nأرسل التفاصيل هكذا:\nالمبلغ\nاسم الشخص (مثلاً: علي)\n\n(أرسل 0 لتخطي هذه الخطوة)`);
                      }
                  }
              } else {
@@ -2935,7 +2935,9 @@ export async function handleTelegramMessage(msg: any) {
              }
              return;
         } else if (session.step === UserStep.AWAITING_ACCOUNT_EXPENSE_AMOUNT) {
-             const cleanedStr = text.replace(/[^\d.]/g, '');
+             const parts = text.split('\n').map(p => p.trim()).filter(p => !!p);
+             const cleanedStr = parts[0]?.replace(/[^\d.]/g, '') || '';
+             
              if (cleanedStr === '') {
                  await bot?.sendMessage(chatId, '⚠️ الرجاء إدخال رقم صحيح للمبلغ (أو 0 للتخطي).');
                  return;
@@ -2946,13 +2948,9 @@ export async function handleTelegramMessage(msg: any) {
                  userSessions.delete(userId);
                  return;
              }
-             session.data.amount = amount;
-             userSessions.set(userId, { step: UserStep.AWAITING_ACCOUNT_EXPENSE_PERSON, data: session.data });
-             await bot?.sendMessage(chatId, '👤 من قام بدفع هذا المبلغ؟ (أرسل اسم الشخص، مثلاً: علي، أو من الصندوق)');
-             return;
-        } else if (session.step === UserStep.AWAITING_ACCOUNT_EXPENSE_PERSON) {
-             const person = text.trim();
-             const amount = session.data.amount;
+             
+             let person = parts.length > 1 ? parts[1] : 'الصندوق';
+
              const productName = session.data.productName;
              const baghdadTime = new Date(Date.now() + (3 * 60 * 60 * 1000));
              const dateStr = baghdadTime.toISOString().split('T')[0];
