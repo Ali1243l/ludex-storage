@@ -1122,7 +1122,7 @@ function startTelegramBot() {
                 chat_id: chatId, message_id: query.message?.message_id, parse_mode: 'Markdown',
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: '🔝 أعلى 10 زبائن', callback_data: 'customers_view_top' }],
+                        [{ text: '🔝 أعلى 5 زبائن', callback_data: 'customers_view_top' }],
                         [{ text: '📋 قائمة الزبائن', callback_data: 'customers_view_list' }],
                         [{ text: '🔙 رجوع', callback_data: 'menu_main' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]
                     ]
@@ -1385,14 +1385,15 @@ function startTelegramBot() {
         }
         else if (data === 'customers_view_top') {
            if (!supabase) return;
-           const { data: custs } = await supabase.from('customers').select('*').order('total_spent', { ascending: false }).limit(10);
+           const { data: custs } = await supabase.from('customers').select('*').order('total_spent', { ascending: false }).limit(5);
            if (!custs || custs.length === 0) {
                await bot?.editMessageText('❌ لا يوجد زبائن مسجلين.', { chat_id: chatId, message_id: query.message?.message_id, reply_markup: { inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_customers' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]] } }).catch(()=>{});
                return;
            }
-           let msg = `🔝 **أعلى 10 زبائن حسب المبلغ الكلي:**\n\n`;
+           let msg = `🔝 **أعلى 5 زبائن حسب المبلغ الكلي:**\n\n`;
            custs.forEach((c, idx) => {
-               msg += `${idx+1}. 👤 **${c.name}**\n💵 المبلغ: ${c.total_spent || 0} د.ع  |  🛒 عدد المشتريات: ${c.purchase_count || 0}\n🔑 كود: ${c.customer_code}\n${c.customer_username ? '@' + c.customer_username : 'بدون يوزر'}\n---\n`;
+               // Make name, code, username copyable
+               msg += `${idx+1}. 👤 \`${c.name}\`\n💵 المبلغ: ${c.total_spent || 0} د.ع  |  🛒 عدد المشتريات: ${c.purchase_count || 0}\n🔑 كود: \`${c.customer_code}\`\n${c.customer_username ? '💬 يوزر: `@' + c.customer_username + '`' : 'بدون يوزر'}\n---\n`;
            });
            await bot?.editMessageText(msg, { 
                chat_id: chatId, message_id: query.message?.message_id,
@@ -1404,14 +1405,15 @@ function startTelegramBot() {
         }
         else if (data === 'customers_view_list') {
            if (!supabase) return;
-           const { data: custs } = await supabase.from('customers').select('*').order('created_at', { ascending: false }).limit(20);
+           const { data: custs } = await supabase.from('customers').select('*').order('created_at', { ascending: false }).limit(5);
            if (!custs || custs.length === 0) {
                await bot?.editMessageText('❌ لا يوجد زبائن مسجلين.', { chat_id: chatId, message_id: query.message?.message_id, reply_markup: { inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_customers' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]] } }).catch(()=>{});
                return;
            }
-           let msg = `📋 **قائمة أحدث 20 زبون:**\n\n`;
+           let msg = `📋 **قائمة أحدث 5 زبائن:**\n\n`;
            custs.forEach((c, idx) => {
-               msg += `👤 **${c.name}**\n💵 ${c.total_spent || 0} د.ع  |  🛒 ${c.purchase_count || 0} طلب\n🔑 كود: ${c.customer_code}\n---\n`;
+               // Make name, code, username copyable
+               msg += `👤 \`${c.name}\`\n💵 ${c.total_spent || 0} د.ع  |  🛒 ${c.purchase_count || 0} طلب\n🔑 كود: \`${c.customer_code}\`\n${c.customer_username ? '💬 يوزر: `@' + c.customer_username + '`' : 'بدون يوزر'}\n---\n`;
            });
            await bot?.editMessageText(msg, { 
                chat_id: chatId, message_id: query.message?.message_id,
