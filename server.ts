@@ -642,6 +642,7 @@ async function processCartCheckout(chatId: number, userId: number, session: User
         const { error: saleErr } = await supabase.from('sales').insert([insertData]);
         if (saleErr) {
             if (saleErr.message.includes("costPrice")) delete insertData.costPrice;
+            if (saleErr.message.includes("customerUsername") && insertData.customerUsername) delete insertData.customerUsername;
             await supabase.from('sales').insert([insertData]).catch(()=>{});
         }
     }
@@ -795,9 +796,9 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
     const { error } = await supabase.from('sales').insert([insertData]);
 
     if (error) {
-        const errorMsg = error.message;
+        const errorMsg = error.message || String(error);
         // Ignore column mapping error if customerUsername doesn't exist
-        if (errorMsg.includes("column") && errorMsg.includes("does not exist")) {
+        if ((errorMsg.includes("column") && errorMsg.includes("does not exist")) || errorMsg.includes("Could not find the")) {
              if (errorMsg.includes("costPrice")) delete insertData.costPrice;
              if (errorMsg.includes("customerUsername") && session.data.customerUsername) delete insertData.customerUsername;
              
@@ -2539,8 +2540,8 @@ export async function handleTelegramMessage(msg: any) {
                 const { error } = await supabase.from('sales').update(updates).eq('id', session.data.editId);
                 
                 if (error) {
-                    const errorMsg = error.message;
-                    if (errorMsg.includes("column") && errorMsg.includes("does not exist")) {
+                    const errorMsg = error.message || String(error);
+                    if ((errorMsg.includes("column") && errorMsg.includes("does not exist")) || errorMsg.includes("Could not find the")) {
                         delete updates.customerUsername;
                         await supabase.from('sales').update(updates).eq('id', session.data.editId);
                     } else {
