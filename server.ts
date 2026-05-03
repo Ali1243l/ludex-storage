@@ -8,10 +8,7 @@ import cron from 'node-cron';
 import path from 'path';
 
 function isAuthorized(chatId: number | string, userId: number | string): boolean {
-    const allowedIdsStr = process.env.ALLOWED_CHAT_IDS || process.env.ALLOWED_CHAT_ID;
-    if (!allowedIdsStr) return true;
-    const allowedIds = allowedIdsStr.split(',').map((i: string) => i.trim());
-    return allowedIds.includes(userId.toString()) || allowedIds.includes(chatId.toString());
+    return true;
 }
 import { fileURLToPath } from 'url';
 import * as cheerio from 'cheerio';
@@ -1889,26 +1886,7 @@ export async function handleTelegramMessage(msg: any) {
     }
 
     // 2. إذا الرسالة موجهة للبوت.. نتأكد هل المحادثة مصرحة لو لا
-    const allowedChatIdsStr = process.env.ALLOWED_CHAT_IDS || process.env.ALLOWED_CHAT_ID;
-    
-    // الأيديات اللي طلبت أضيفها (الكروب، خاصك، وخاص صديقك)
-    const predefinedIds = ['-1003913799939', '701018758', '2127299910'];
-    let allowedIds = [...predefinedIds];
-
-    if (allowedChatIdsStr) {
-      const envIds = allowedChatIdsStr.split(',').map(id => id.trim());
-      allowedIds = [...new Set([...allowedIds, ...envIds])]; // دمج الأيديات
-    }
-
-    if (!allowedIds.includes(chatId.toString())) {
-      console.log(`Dropped message from unauthorized chat ID: ${chatId}`);
-      try {
-        await bot.sendMessage(chatId, `عذراً، غير مصرح لك باستخدام هذا البوت في هذه المحادثة.\n\nمعرف هذه المحادثة (الكروب أو الخاص) هو:\n${chatId}\n\nيرجى نسخ هذا الرقم وإضافته إلى إعدادات ALLOWED_CHAT_IDS في المشروع.`);
-      } catch (e) {
-        console.error("Failed to send unauthorized message", e);
-      }
-      return;
-    }
+    // تمت إزالة التحقق من الأيدي من قبل المستخدم
 
     const messageId = msg.message_id;
     
