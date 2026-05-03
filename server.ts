@@ -864,7 +864,7 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
         : `✅ تمت إضافة مبيعة جديدة!\n\n👤 الزبون: ${custDisplay}\n📦 المنتج: ${session.data.productName}\n💵 السعر: ${session.data.price} د.ع\n📝 ملاحظات: ${strictNotes || 'لا يوجد'}`;
     
     if (finalCustInfo) {
-        receiptText += `\n\n---\n✅ معلومات الزبون (سهلة النسخ):\n\`\`\`\nالاسم: ${finalCustInfo.name}\nعدد مرات الشراء: ${finalCustInfo.purchase_count || 1}\nكود الزبون: ${finalCustInfo.customer_code}\nالمبلغ الكلي: ${finalCustInfo.total_spent || session.data.price}\n\`\`\``;
+        receiptText += `\n\n---\n✅ معلومات الزبون (سهلة النسخ):\nالاسم: \`${finalCustInfo.name}\`\nعدد مرات الشراء: \`${finalCustInfo.purchase_count || 1}\`\nكود الزبون: \`${finalCustInfo.customer_code}\`\nالمبلغ الكلي: \`${finalCustInfo.total_spent || session.data.price}\``;
     }
 
     try {
