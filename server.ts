@@ -7,10 +7,11 @@ import { execSync } from 'child_process';
 import cron from 'node-cron';
 import path from 'path';
 
-function isAuthorized(userId: number | string): boolean {
+function isAuthorized(chatId: number | string, userId: number | string): boolean {
     const allowedIdsStr = process.env.ALLOWED_CHAT_IDS || process.env.ALLOWED_CHAT_ID;
     if (!allowedIdsStr) return true;
-    return allowedIdsStr.split(',').map((i: string) => i.trim()).includes(userId.toString());
+    const allowedIds = allowedIdsStr.split(',').map((i: string) => i.trim());
+    return allowedIds.includes(userId.toString()) || allowedIds.includes(chatId.toString());
 }
 import { fileURLToPath } from 'url';
 import * as cheerio from 'cheerio';
@@ -953,7 +954,7 @@ function startTelegramBot() {
       const userId = query.from.id;
 
       if (!chatId || !data) return;
-      if (!isAuthorized(userId)) {
+      if (!isAuthorized(chatId, userId)) {
           await bot?.answerCallbackQuery(query.id, { text: 'غير مصرح لك.', show_alert: true }).catch(() => {});
           return;
       }
@@ -1861,12 +1862,13 @@ export async function handleTelegramMessage(msg: any) {
         const chatId = msg.chat.id;
         const isPrivate = msg.chat.type === 'private';
         const userSenderId = msg.from?.id;
-        if (userSenderId && !isAuthorized(userSenderId)) return;
-        const BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || '@Ludex_store_storage_bot';
+        if (userSenderId && !isAuthorized(chatId, userSenderId)) return;
+        const envBotUsername = process.env.TELEGRAM_BOT_USERNAME || 'Ludex_store_storage_bot';
+        const BOT_USERNAME = envBotUsername.replace('@', '');
         const messageContent = msg.text || msg.caption || '';
 
     const isMention = messageContent.toLowerCase().includes(BOT_USERNAME.toLowerCase());
-    const isReplyToBot = msg.reply_to_message?.from?.username === BOT_USERNAME.replace('@', '');
+    const isReplyToBot = msg.reply_to_message?.from?.username === BOT_USERNAME;
     const isCommand = messageContent.startsWith('/');
     const isUserInSession = userSessions.has(msg.from.id);
 
@@ -1875,7 +1877,9 @@ export async function handleTelegramMessage(msg: any) {
     const looksLikeSaleDetails = linesCheck.length >= 2 && !isNaN(parsePrice(linesCheck[0])) && !messageContent.startsWith('إضافة') && !messageContent.startsWith('بيع') && !messageContent.startsWith('/');
 
     const directWords = ['📥 سحب حساب للزبون', '🛒 مبيعة سريعة', '🛒 سلة مشتريات', '📚 الردود السريعة', '📊 ملخص اليوم', '⚙️ الإعدادات', '🔍 بحث شامل', 'قائمة', 'القائمة', 'تقرير'];
-    const isDirectWord = directWords.includes(messageContent.trim());
+    let text = messageContent.replace(new RegExp(`@?${BOT_USERNAME}`, 'gi'), '').trim();
+    const cleanText = text;
+    const isDirectWord = directWords.includes(cleanText);
 
     // 1. بالخاص ما يحتاج منشن، بالكروب يحتاج منشن او ريبلاي
     // إذا الرسالة مو للبوت، تجاهلها بصمت تام (بدون رسالة خطأ)
@@ -1926,8 +1930,7 @@ export async function handleTelegramMessage(msg: any) {
     }
 
     console.log('Received message from Telegram:', messageContent);
-    let text = messageContent.replace(new RegExp(BOT_USERNAME, 'i'), '').trim();
-    const cleanText = text;
+    // cleanText is already derived above
     
     if (msg.reply_to_message && msg.reply_to_message.text) {
         text += `\n\n(هذه الرسالة هي رد على: "${msg.reply_to_message.text}")`;
