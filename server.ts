@@ -810,7 +810,7 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
                  return;
              }
              if (errorMsg.includes("costPrice")) {
-                 await bot?.sendMessage(chatId, '⚠️ ملاحظة: تم تسجيل المبيعة لكن عمود (costPrice) غير मौजूद في جدول sales، لذا لم يتم إرفاق التكلفة. الرجاء إضافته من Supabase.');
+                 await bot?.sendMessage(chatId, '⚠️ ملاحظة: تم تسجيل المبيعة لكن عمود (costPrice) غير موجود في جدول sales، لذا لم يتم إرفاق التكلفة. الرجاء إضافته من Supabase.');
              }
         } else {
              await bot?.sendMessage(chatId, 'حدث خطأ أثناء الحفظ: ' + error.message);
@@ -857,7 +857,7 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
         : `✅ تمت إضافة مبيعة جديدة!\n\n👤 الزبون: ${custDisplay}\n📦 المنتج: ${session.data.productName}\n💵 السعر: ${session.data.price} د.ع\n📝 ملاحظات: ${strictNotes || 'لا يوجد'}`;
     
     if (finalCustInfo) {
-        receiptText += `\n\n---\n✅ معلومات الزبون (سهلة النسخ):\nالاسم: ${finalCustInfo.name}\nعدد مرات الشراء: ${finalCustInfo.purchase_count || 1}\nكود الزبون: ${finalCustInfo.customer_code}\nالمبلغ الكلي: ${finalCustInfo.total_spent || session.data.price}`;
+        receiptText += `\n\n---\n✅ معلومات الزبون (سهلة النسخ):\n\`\`\`\nالاسم: ${finalCustInfo.name}\nعدد مرات الشراء: ${finalCustInfo.purchase_count || 1}\nكود الزبون: ${finalCustInfo.customer_code}\nالمبلغ الكلي: ${finalCustInfo.total_spent || session.data.price}\n\`\`\``;
     }
 
     try {
