@@ -948,14 +948,19 @@ function startTelegramBot() {
     // استخدام Webhook في بيئة الاستضافة (Vercel)
     bot = new TelegramBot(token);
   } else if (isPre) {
-    // إيقاف البوت في بيئة العرض المسبق (Shared App) لمنع تضارب Polling
-    console.log('Bot is disabled in ais-pre environment to prevent 409 Conflict with ais-dev.');
-    bot = null;
-    return;
+    // تفعيل البوت في بيئة العرض المسبق (Shared App) بنظام Webhook ليعمل 24/7
+    console.log('Bot is running in Webhook mode for Shared App (ais-pre).');
+    bot = new TelegramBot(token);
+    const webhookUrl = `${appUrl}/api/telegram-webhook`;
+    bot.setWebHook(webhookUrl).then(() => {
+        console.log(`Webhook auto-configured for ais-pre: ${webhookUrl}`);
+    }).catch(e => console.log('Failed to auto-configure webhook:', e));
   } else {
     // تفعيل الـ Polling في بيئة التطوير
     console.log('Bot is running in Polling mode for Development.');
     bot = new TelegramBot(token, { polling: true });
+    // حذف الـ Webhook الخاص بنسخة المشاركة لكي يعمل الـ Polling حالياً
+    bot.deleteWebHook().catch(() => {});
     
     bot.on('polling_error', (error: any) => {
       if (error.code === 'ETELEGRAM' && error.message.includes('409 Conflict')) {
