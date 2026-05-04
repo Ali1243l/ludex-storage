@@ -501,7 +501,11 @@ export enum UserStep {
   AWAITING_ACCOUNT_EXPENSE_AMOUNT = "AWAITING_ACCOUNT_EXPENSE_AMOUNT",
   AWAITING_ACCOUNT_EXPENSE_PERSON = "AWAITING_ACCOUNT_EXPENSE_PERSON",
   AWAITING_SALE_EXPENSE_AMOUNT = "AWAITING_SALE_EXPENSE_AMOUNT",
-  AWAITING_SALE_EXPENSE_PERSON = "AWAITING_SALE_EXPENSE_PERSON"
+  AWAITING_SALE_EXPENSE_PERSON = "AWAITING_SALE_EXPENSE_PERSON",
+  FINANCE_EDIT_CHOOSE_FIELD = "FINANCE_EDIT_CHOOSE_FIELD",
+  FINANCE_EDIT_AWAITING_AMOUNT = "FINANCE_EDIT_AWAITING_AMOUNT",
+  FINANCE_EDIT_AWAITING_PERSON = "FINANCE_EDIT_AWAITING_PERSON",
+  FINANCE_EDIT_AWAITING_DETAILS = "FINANCE_EDIT_AWAITING_DETAILS"
 }
 
 export interface UserState {
@@ -1183,6 +1187,7 @@ function startTelegramBot() {
                         [{ text: '📈 ملخص الواردات', callback_data: 'finances_income' }, { text: '📉 ملخص المصروفات', callback_data: 'finances_expenses' }],
                         [{ text: '🏆 المنتجات الأكثر مبيعاً', callback_data: 'finances_top_performers' }],
                         [{ text: '➖ إضافة مصروف جديد', callback_data: 'finances_add_expense' }],
+                        [{ text: '✏️ تعديل مصروف', callback_data: 'finances_edit_expense_list' }, { text: '🗑️ حذف مصروف', callback_data: 'finances_delete_expense_list' }],
                         [{ text: '📥 تصدير سجل المبيعات', callback_data: 'export_sales_csv' }],
                         [{ text: '🔙 رجوع', callback_data: 'menu_main' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]
                     ]
@@ -1573,6 +1578,85 @@ function startTelegramBot() {
                    inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_finances' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]]
                }
            }).catch(()=>{});
+        }
+        else if (data === 'finances_edit_expense_list' || data === 'finances_delete_expense_list') {
+            if (!supabase) return;
+            const action = data === 'finances_edit_expense_list' ? 'edit' : 'del';
+            const actionTitle = data === 'finances_edit_expense_list' ? 'تعديل' : 'حذف';
+            
+            const { data: txList } = await supabase.from('transactions').select('*').eq('type', 'expense').order('created_at', { ascending: false }).limit(10);
+            
+            if (!txList || txList.length === 0) {
+                await bot?.editMessageText('❌ لا توجد مصروفات مسجلة أينما يمكن التعديل/الحذف.', {
+                    chat_id: chatId, message_id: query.message?.message_id,
+                    reply_markup: {
+                        inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_finances' }]]
+                    }
+                }).catch(()=>{});
+                return;
+            }
+
+            const keyboard: any[] = [];
+            txList.forEach((tx) => {
+                const desc = tx.description ? tx.description.substring(0, 30) : 'بدون تفاصيل';
+                keyboard.push([{ text: `${tx.amount} د.ع - ${desc}...`, callback_data: `finances_${action}_${tx.id}` }]);
+            });
+            keyboard.push([{ text: '🔙 رجوع', callback_data: 'menu_finances' }, { text: '❌ إغلاق', callback_data: 'close_msg' }]);
+
+            await bot?.editMessageText(`اختر المصروف الذي ترغب بـ **${actionTitle}**:`, {
+                chat_id: chatId, message_id: query.message?.message_id,
+                parse_mode: 'Markdown',
+                reply_markup: { inline_keyboard: keyboard }
+            }).catch(()=>{});
+        }
+        else if (data.startsWith('finances_del_')) {
+            if (!supabase) return;
+            const txId = data.replace('finances_del_', '');
+            const { error } = await supabase.from('transactions').delete().eq('id', txId); // Hard delete to keep it simple, or user can choose. We do hard delete as per standard approach for 'transactions' or maybe update? "قم بتحديث حقل is_active = false أو إزالة الصف". We will use delete().
+            if (error) {
+                await bot?.sendMessage(chatId, `❌ لم يتم حذف المصروف: ${error.message}`);
+                return;
+            }
+            await bot?.editMessageText('✅ تم حذف المصروف بنجاح.', {
+                chat_id: chatId, message_id: query.message?.message_id,
+                reply_markup: {
+                    inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'menu_finances' }]]
+                }
+            }).catch(()=>{});
+        }
+        else if (data.startsWith('finances_edit_')) {
+            const txId = data.replace('finances_edit_', '');
+            userSessions.set(userId, {
+                step: UserStep.FINANCE_EDIT_CHOOSE_FIELD,
+                data: { editId: txId, messageId: query.message?.message_id }
+            });
+            await bot?.editMessageText('ما الذي تريد تعديله في هذا المصروف؟', {
+                chat_id: chatId, message_id: query.message?.message_id,
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '💸 المبلغ', callback_data: 'finedit_amount' }, { text: '👤 الشخص', callback_data: 'finedit_person' }],
+                        [{ text: '📝 التفاصيل', callback_data: 'finedit_details' }],
+                        [{ text: '🔙 إلغاء التعديل', callback_data: 'menu_finances' }]
+                    ]
+                }
+            }).catch(()=>{});
+        }
+        else if (data.startsWith('finedit_')) {
+            const field = data.replace('finedit_', '');
+            const session = userSessions.get(userId);
+            if (session && session.step === UserStep.FINANCE_EDIT_CHOOSE_FIELD) {
+                if (field === 'amount') {
+                    session.step = UserStep.FINANCE_EDIT_AWAITING_AMOUNT;
+                    await bot?.sendMessage(chatId, '💸 أرسل المبلغ الجديد للمصروف (أرقام فقط):');
+                } else if (field === 'person') {
+                    session.step = UserStep.FINANCE_EDIT_AWAITING_PERSON;
+                    await bot?.sendMessage(chatId, '👤 أرسل اسم الشخص الجديد (مثلاً: علي، أو الصندوق):');
+                } else if (field === 'details') {
+                    session.step = UserStep.FINANCE_EDIT_AWAITING_DETAILS;
+                    await bot?.sendMessage(chatId, '📝 أرسل التفاصيل/الملاحظة الجديدة:');
+                }
+                await bot?.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: query.message?.message_id }).catch(()=>{});
+            }
         }
 
         else if (data === 'export_sales_csv') {
@@ -2775,6 +2859,47 @@ export async function handleTelegramMessage(msg: any) {
              session.data.amount = amount;
              session.step = UserStep.AWAITING_EXPENSE_DETAILS;
              await bot?.sendMessage(chatId, '📝 أرسل تفاصيل هذا المصروف (مثال: راتب، إيجار، إعلانات):');
+             return;
+        }
+
+        if (session.step === UserStep.FINANCE_EDIT_AWAITING_AMOUNT) {
+             const amount = Number(text.replace(/[^\d.]/g, ''));
+             if (isNaN(amount) || amount <= 0) {
+                 await bot?.sendMessage(chatId, '⚠️ الرجاء إدخال مبلغ صحيح.');
+                 return;
+             }
+             try {
+                 if (!supabase) return;
+                 await supabase.from('transactions').update({ amount }).eq('id', session.data.editId);
+                 await bot?.sendMessage(chatId, '✅ تم تحديث المبلغ بنجاح.');
+             } catch (err: any) {
+                 await bot?.sendMessage(chatId, '❌ خطأ: ' + err.message);
+             }
+             userSessions.delete(userId);
+             return;
+        }
+
+        if (session.step === UserStep.FINANCE_EDIT_AWAITING_PERSON) {
+             try {
+                 if (!supabase) return;
+                 await supabase.from('transactions').update({ person: text.trim() }).eq('id', session.data.editId);
+                 await bot?.sendMessage(chatId, '✅ تم تحديث اسم الشخص بنجاح.');
+             } catch (err: any) {
+                 await bot?.sendMessage(chatId, '❌ خطأ: ' + err.message);
+             }
+             userSessions.delete(userId);
+             return;
+        }
+
+        if (session.step === UserStep.FINANCE_EDIT_AWAITING_DETAILS) {
+             try {
+                 if (!supabase) return;
+                 await supabase.from('transactions').update({ description: text.trim() }).eq('id', session.data.editId);
+                 await bot?.sendMessage(chatId, '✅ تم تحديث تفاصيل المصروف بنجاح.');
+             } catch (err: any) {
+                 await bot?.sendMessage(chatId, '❌ خطأ: ' + err.message);
+             }
+             userSessions.delete(userId);
              return;
         }
 
