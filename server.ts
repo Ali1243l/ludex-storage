@@ -499,7 +499,9 @@ export enum UserStep {
   AWAITING_CART_DETAILS = "AWAITING_CART_DETAILS",
   AWAITING_WARRANTY_DETAILS = "AWAITING_WARRANTY_DETAILS",
   AWAITING_ACCOUNT_EXPENSE_AMOUNT = "AWAITING_ACCOUNT_EXPENSE_AMOUNT",
-  AWAITING_ACCOUNT_EXPENSE_PERSON = "AWAITING_ACCOUNT_EXPENSE_PERSON"
+  AWAITING_ACCOUNT_EXPENSE_PERSON = "AWAITING_ACCOUNT_EXPENSE_PERSON",
+  AWAITING_SALE_EXPENSE_AMOUNT = "AWAITING_SALE_EXPENSE_AMOUNT",
+  AWAITING_SALE_EXPENSE_PERSON = "AWAITING_SALE_EXPENSE_PERSON"
 }
 
 export interface UserState {
@@ -917,7 +919,22 @@ async function saveSaleAndSendReceipt(chatId: number, userId: number, session: U
     
     await bot?.sendMessage(chatId, invoiceMsg, { parse_mode: 'Markdown' }).catch(()=>{});
 
-    userSessions.delete(userId);
+    userSessions.set(userId, {
+        step: UserStep.IDLE,
+        data: {
+             productName: session.data.productName,
+             salePrice: session.data.price
+        }
+    });
+
+    await bot?.sendMessage(chatId, `✅ تم تسجيل المبيعة بنجاح.\n❓ هل يوجد مبلغ انصرف على هذه البيعة (تكلفة شراء فورية)؟`, {
+        reply_markup: {
+             inline_keyboard: [
+                 [{ text: 'نعم، أضف مصروف 💸', callback_data: 'sale_add_expense_yes' }],
+                 [{ text: 'لا، إنهاء ❌', callback_data: 'sale_add_expense_no' }]
+             ]
+        }
+    }).catch(()=>{});
 }
 
 const defaultChatIdStr = process.env.TELEGRAM_CHAT_ID;
@@ -989,6 +1006,30 @@ function startTelegramBot() {
       }
 
       try {
+        if (data === 'sale_add_expense_yes') {
+            const session = userSessions.get(userId);
+            if (session && session.data.productName && session.data.salePrice !== undefined) {
+                userSessions.set(userId, {
+                    step: UserStep.AWAITING_SALE_EXPENSE_AMOUNT,
+                    data: session.data
+                });
+                await bot?.editMessageText('💸 كم المبلغ الذي صرفته لشراء هذه البيعة؟ ومن قام بالصرف؟\n\nأرسل التفاصيل هكذا:\nالمبلغ\nاسم الشخص (مثلاً: الصندوق)', {
+                    chat_id: chatId,
+                    message_id: query.message?.message_id
+                }).catch(() => {});
+            } else {
+                await bot?.answerCallbackQuery(query.id, { text: '❌ انتهت الجلسة أو لا توجد بيانات مسجلة.', show_alert: true }).catch(() => {});
+            }
+            return;
+        } else if (data === 'sale_add_expense_no') {
+            userSessions.delete(userId);
+            await bot?.editMessageText('✅ تم إنهاء عملية تسجيل المبيعة دون إضافة مصروف.', {
+                chat_id: chatId,
+                message_id: query.message?.message_id
+            }).catch(() => {});
+            return;
+        }
+
         if (data.startsWith('delete_sale_')) {
           const saleId = data.replace('delete_sale_', '');
           if (!supabase) throw new Error('Database not connected');
@@ -2973,6 +3014,46 @@ export async function handleTelegramMessage(msg: any) {
                      await bot?.sendMessage(chatId, `❌ حدث خطأ أثناء إضافة المصروف: ${error.message}`);
                  } else {
                      await bot?.sendMessage(chatId, `✅ تم تسجيل الحساب في المخزن وإضافة مبلغ ${amount} كـ مصروف بنجاح!`);
+                 }
+             }
+             userSessions.delete(userId);
+             return;
+        } else if (session.step === UserStep.AWAITING_SALE_EXPENSE_AMOUNT) {
+             const parts = text.split('\n').map(p => p.trim()).filter(p => !!p);
+             const cleanedStr = parts[0]?.replace(/[^\d.]/g, '') || '';
+             
+             if (cleanedStr === '') {
+                 await bot?.sendMessage(chatId, '⚠️ الرجاء إدخال رقم صحيح للمبلغ (أو 0 للتخطي).');
+                 return;
+             }
+             const amount = Number(cleanedStr);
+             if (amount === 0) {
+                 await bot?.sendMessage(chatId, '✅ تم تخطي إضافة المصروف. اكتملت العملية.');
+                 userSessions.delete(userId);
+                 return;
+             }
+             
+             let person = parts.length > 1 ? parts[1] : 'الصندوق';
+
+             const productName = session.data.productName || 'غير معروف';
+             const salePrice = session.data.salePrice || 0;
+             const netProfit = salePrice - amount;
+             const baghdadTime = new Date(Date.now() + (3 * 60 * 60 * 1000));
+             const dateStr = baghdadTime.toISOString().split('T')[0];
+             
+             if (supabase) {
+                 const { error } = await supabase.from('transactions').insert([{
+                     type: 'expense',
+                     amount: amount,
+                     date: dateStr,
+                     description: `شراء لمنتج: ${productName} | المبيع: ${salePrice} - التكلفة: ${amount} = صافي الربح: ${netProfit}`,
+                     person: person
+                 }]);
+                 
+                 if (error) {
+                     await bot?.sendMessage(chatId, `❌ حدث خطأ أثناء إضافة المصروف: ${error.message}`);
+                 } else {
+                     await bot?.sendMessage(chatId, `✅ تم تسجيل المصروف. صافي ربحك من هذه البيعة هو: ${netProfit} د.ع`);
                  }
              }
              userSessions.delete(userId);
