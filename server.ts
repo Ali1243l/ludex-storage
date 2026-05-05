@@ -256,7 +256,10 @@ app.get('/api/sync-webhook', async (req, res) => {
   }
 });
 
-app.post('/api/telegram-webhook', async (req, res) => {
+app.post('/api/telegram-webhook', (req, res) => {
+  // Always respond 200 immediately to prevent Telegram from retrying endlessly
+  res.status(200).send('OK');
+
   try {
     console.log('Received Telegram webhook:', JSON.stringify(req.body));
     if (!bot) {
@@ -264,18 +267,11 @@ app.post('/api/telegram-webhook', async (req, res) => {
       startTelegramBot();
     }
     
-    if (req.body && req.body.message) {
-      await handleTelegramMessage(req.body.message);
-    } else if (req.body && req.body.edited_message) {
-      await handleTelegramMessage(req.body.edited_message);
-    } else if (bot) {
-      bot.processUpdate(req.body); // fallback for inline actions etc, fire and forget
+    if (bot) {
+      bot.processUpdate(req.body);
     }
   } catch(err) {
     console.error('Webhook processing error:', err);
-  } finally {
-    // Always respond 200 to prevent Telegram from retrying endlessly
-    res.status(200).send('OK');
   }
 });
 
@@ -962,41 +958,24 @@ function startTelegramBot() {
 
   const rawAppUrl = process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
   const appUrl = rawAppUrl?.replace(/\/$/, '')?.replace('/#', '')?.replace('#', ''); // Remove trailing slash if any
-  const isDev = !process.env.VERCEL && (appUrl?.includes('ais-dev') || appUrl?.includes('localhost') || !appUrl);
-  const isPre = appUrl?.includes('ais-pre');
 
-  if (process.env.VERCEL) {
-    // استخدام Webhook في بيئة الاستضافة (Vercel)
-    bot = new TelegramBot(token);
-  } else if (isPre) {
-    // تفعيل البوت في بيئة العرض المسبق (Shared App) بنظام Webhook ليعمل 24/7
-    console.log('Bot is running in Webhook mode for Shared App (ais-pre).');
-    bot = new TelegramBot(token);
-    const webhookUrl = `${appUrl}/api/telegram-webhook`;
-    bot.setWebHook(webhookUrl).then(() => {
-        console.log(`Webhook auto-configured for ais-pre: ${webhookUrl}`);
-    }).catch(e => console.log('Failed to auto-configure webhook:', e));
+  console.log('Bot is running in Webhook mode.');
+  bot = new TelegramBot(token);
+  
+  if (appUrl) {
+      const webhookUrl = `${appUrl}/api/telegram-webhook`;
+      bot.setWebHook(webhookUrl).then(() => {
+          console.log(`Webhook auto-configured: ${webhookUrl}`);
+      }).catch(e => console.log('Failed to auto-configure webhook:', e));
   } else {
-    // تفعيل الـ Polling في بيئة التطوير
-    console.log('Bot is running in Polling mode for Development.');
-    bot = new TelegramBot(token, { polling: true });
-    // حذف الـ Webhook الخاص بنسخة المشاركة لكي يعمل الـ Polling حالياً
-    bot.deleteWebHook().catch(() => {});
-    
-    bot.on('polling_error', (error: any) => {
-      if (error.code === 'ETELEGRAM' && error.message.includes('409 Conflict')) {
-        console.log('Another instance is polling. Waiting gracefully... we will retry.');
-        // Don't permanently stop polling. Just let it keep retrying so we can overtake dead instances.
-      } else {
-        console.log('Polling error:', error.message);
-      }
-    });
+      console.log('No APP_URL provided. Webhook not set automatically.');
   }
 
   const processedMessages = new Set<number>();
 
   if (bot) {
     bot.on('message', handleTelegramMessage);
+    bot.on('edited_message', handleTelegramMessage);
 
     bot.on('callback_query', async (query) => {
       const chatId = query.message?.chat.id;
@@ -3291,18 +3270,6 @@ async function startServer() {
   // إغلاق السيرفر والبوت بشكل نظيف عند إعادة التشغيل
   const shutdown = async () => {
     console.log('Shutting down gracefully...');
-    if (bot) {
-      try {
-        const appUrl = process.env.APP_URL;
-        const isDev = appUrl?.includes('ais-dev');
-        if (!process.env.VERCEL) {
-           await bot.stopPolling().catch(() => {});
-           console.log('Telegram bot polling stopped (if active).');
-        }
-      } catch (e) {
-        console.error('Error stopping bot:', e);
-      }
-    }
     server.close(() => {
       console.log('Server closed.');
       process.exit(0);
